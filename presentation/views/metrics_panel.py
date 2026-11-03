@@ -5,6 +5,9 @@ from domain.entities.question_score import QuestionScore
 from domain.scoring.scoring_method import ScoreKind, ScoringMethod
 
 CARDS_PER_ROW = 6
+CARD_SPACING = 12
+CARD_PADDING = 14
+CARD_INNER_SPACING = 6
 EMPTY_VALUE = "—"
 GENERIC_HEADER = "score"
 SCORE_FORMAT = "{:.3f}"
@@ -22,8 +25,10 @@ COMMON_CARD_KEYS = (
 )
 
 
-def _captions(header: str) -> dict[str, str]:
+def _captions(header: str, score_kind: ScoreKind = ScoreKind.CONTINUOUS) -> dict[str, str]:
+    average_caption = header if score_kind is ScoreKind.BINARY else f"Average {header}"
     return {
+        "average": average_caption,
         "question_count": "Questions",
         "median": f"Median {header}",
         "highest": f"Highest {header}",
@@ -42,8 +47,8 @@ def _captions(header: str) -> dict[str, str]:
 
 def _card_order(score_kind: ScoreKind, has_corpus_score: bool) -> list[str]:
     if score_kind is ScoreKind.BINARY:
-        return ["question_count", "correct", "incorrect", *COMMON_CARD_KEYS]
-    leading_keys = ["question_count", "median", "highest", "lowest"]
+        return ["average", "question_count", "correct", "incorrect", *COMMON_CARD_KEYS]
+    leading_keys = ["average", "question_count", "median", "highest", "lowest"]
     if has_corpus_score:
         leading_keys.append("corpus")
     return [*leading_keys, *COMMON_CARD_KEYS]
@@ -53,8 +58,14 @@ def _format_scored_entry(entry: QuestionScore) -> str:
     return f"{SCORE_FORMAT.format(entry.score)} (Q{entry.question.identifier})"
 
 
-def _format_values(metrics: EvaluationMetrics) -> dict[str, str]:
+def _format_values(metrics: EvaluationMetrics, average_score: float, score_kind: ScoreKind) -> dict[str, str]:
+    average_text = (
+        PERCENTAGE_FORMAT.format(average_score)
+        if score_kind is ScoreKind.BINARY
+        else SCORE_FORMAT.format(average_score)
+    )
     values = {
+        "average": average_text,
         "question_count": str(metrics.question_count),
         "median": SCORE_FORMAT.format(metrics.median_score),
         "highest": _format_scored_entry(metrics.highest),
@@ -73,24 +84,25 @@ def _format_values(metrics: EvaluationMetrics) -> dict[str, str]:
     return values
 
 
-class MetricsPanel(QFrame):
+class MetricsPanel(QWidget):
     def __init__(self):
         super().__init__()
-        self.setObjectName("metricsPanel")
-        self._cards: dict[str, QWidget] = {}
+        self._cards: dict[str, QFrame] = {}
         self._caption_labels: dict[str, QLabel] = {}
         self._value_labels: dict[str, QLabel] = {}
         self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(CARD_SPACING)
         for column in range(CARDS_PER_ROW):
             self._grid.setColumnStretch(column, 1)
         for key in _captions(GENERIC_HEADER):
             self._cards[key] = self._build_card(key)
         self.clear()
 
-    def show_metrics(self, metrics: EvaluationMetrics, method: ScoringMethod) -> None:
+    def show_metrics(self, metrics: EvaluationMetrics, method: ScoringMethod, average_score: float) -> None:
         order = _card_order(method.score_kind, metrics.corpus_score is not None)
-        self._arrange(order, _captions(method.column_header))
-        for key, text in _format_values(metrics).items():
+        self._arrange(order, _captions(method.column_header, method.score_kind))
+        for key, text in _format_values(metrics, average_score, method.score_kind).items():
             self._value_labels[key].setText(text)
 
     def clear(self) -> None:
@@ -107,21 +119,20 @@ class MetricsPanel(QFrame):
             self._grid.addWidget(self._cards[key], index // CARDS_PER_ROW, index % CARDS_PER_ROW)
             self._cards[key].show()
 
-    def _build_card(self, key: str) -> QWidget:
+    def _build_card(self, key: str) -> QFrame:
         caption_label = QLabel()
         caption_label.setObjectName("metricCaption")
         value_label = QLabel()
         value_label.setObjectName("metricValue")
-        font = value_label.font()
-        font.setBold(True)
-        font.setPointSize(font.pointSize() + 1)
-        value_label.setFont(font)
         self._caption_labels[key] = caption_label
         self._value_labels[key] = value_label
         layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
+        layout.setSpacing(CARD_INNER_SPACING)
         layout.addWidget(caption_label)
         layout.addWidget(value_label)
-        card = QWidget()
+        card = QFrame()
+        card.setObjectName("metricCard")
+        card.setProperty("primary", key == "average")
         card.setLayout(layout)
         return card

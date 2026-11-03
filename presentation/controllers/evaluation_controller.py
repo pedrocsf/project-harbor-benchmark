@@ -96,6 +96,10 @@ class EvaluationController(QObject):
     def selected_method(self) -> ScoringMethod:
         return self._selected_method
 
+    @property
+    def questions(self) -> list[Question]:
+        return list(self._questions)
+
     def load_dataset(self, source: Path) -> None:
         try:
             questions = self._use_cases.load_questions.execute(source)

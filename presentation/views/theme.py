@@ -1,18 +1,14 @@
 from string import Template
 
-from presentation.views.branding import (
-    ACCENT_BLUE,
-    DIAGONAL_GRADIENT,
-    DISABLED_TEXT_COLOR,
-    GRADIENT_END,
-    SOFT_BLUE,
-    TEXT_COLOR,
-)
+from presentation.views import branding
 
 _MAIN_WINDOW_TEMPLATE = Template(
     """
 QMainWindow, QMessageBox {
-    background: $gradient;
+    background: $background;
+}
+QWidget#content {
+    background: $background;
 }
 QLabel {
     color: $text;
@@ -20,72 +16,109 @@ QLabel {
 QLabel:disabled {
     color: $disabled_text;
 }
+QFrame#header, QFrame#sidebar {
+    background: $panel;
+    border: none;
+}
+QFrame#header {
+    border-bottom: 1px solid $border;
+}
+QFrame#sidebar {
+    border-right: 1px solid $border;
+}
 QLabel#brandTitle {
-    color: white;
-    font-size: 22px;
-    font-weight: 700;
-}
-QLabel#brandSubtitle, QLabel#datasetLabel, QLabel#statusLabel {
-    color: $soft_blue;
-}
-QLabel#brandSubtitle {
-    font-size: 12px;
-}
-QLabel#demoBadge {
-    color: $soft_blue;
-    background: rgba(255, 255, 255, 10%);
-    border: 1px solid rgba(255, 255, 255, 28%);
-    border-radius: 12px;
-    padding: 5px 14px;
+    font-size: 16px;
     font-weight: 600;
 }
-QLabel#averageLabel {
-    color: white;
+QLabel#brandSubtitle, QLabel#statusLabel, QLabel#hintLabel, QLabel#metricCaption, QLabel#datasetCount {
+    color: $secondary_text;
+    font-size: 12px;
 }
-QLabel#averageLabel:disabled {
-    color: $disabled_text;
+QLabel#sectionTitle {
+    color: $secondary_text;
+    font-size: 12px;
+    font-weight: 600;
 }
-QLabel#metricCaption {
-    color: $soft_blue;
-    font-size: 11px;
+QLabel#fieldLabel {
+    color: $label_text;
+    font-size: 13px;
+}
+QLabel#datasetName {
+    font-weight: 600;
+}
+QLabel#metricTitle {
+    font-size: 20px;
+    font-weight: 600;
+}
+QLabel#emptyTitle {
+    font-size: 20px;
+    font-weight: 600;
+}
+QLabel#emptyText {
+    color: $secondary_text;
+}
+QLabel#demoBadge {
+    color: $secondary_text;
+    background: $surface;
+    border: 1px solid $strong_border;
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-weight: 600;
 }
 QLabel#metricValue {
-    color: white;
+    font-size: 18px;
+    font-weight: 700;
 }
-QLabel#metricCaption:disabled, QLabel#metricValue:disabled {
+QLabel#statusLabel:disabled, QLabel#metricCaption:disabled {
     color: $disabled_text;
+}
+QFrame#datasetCard {
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: 10px;
+}
+QFrame#datasetCard[empty="true"] {
+    border: 1px dashed $strong_border;
+}
+QFrame#metricCard {
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: 12px;
+}
+QFrame#metricCard[primary="true"] {
+    border: 1px solid $primary;
+}
+QFrame#metricCard:disabled {
+    background: $panel;
 }
 QLineEdit {
-    background: rgba(255, 255, 255, 9%);
-    border: 1px solid rgba(255, 255, 255, 22%);
+    background: $background;
+    border: 1px solid $strong_border;
     border-radius: 8px;
-    padding: 7px 10px;
-    color: white;
-    selection-background-color: $accent;
-    placeholder-text-color: rgba(255, 255, 255, 45%);
+    padding: 8px 12px;
+    color: $text;
+    selection-background-color: $primary;
+    placeholder-text-color: $disabled_text;
 }
 QLineEdit:focus {
-    border: 1px solid $accent;
+    border: 1px solid $primary;
 }
 QLineEdit:disabled {
-    background: rgba(255, 255, 255, 4%);
-    border: 1px solid rgba(255, 255, 255, 10%);
+    border: 1px solid $border;
     color: $disabled_text;
-    placeholder-text-color: rgba(255, 255, 255, 20%);
 }
 QComboBox {
-    background: rgba(255, 255, 255, 9%);
-    border: 1px solid rgba(255, 255, 255, 22%);
+    background: $background;
+    border: 1px solid $strong_border;
     border-radius: 8px;
-    padding: 7px 10px;
-    color: white;
+    padding: 8px 12px;
+    color: $text;
 }
 QComboBox:focus, QComboBox:on {
-    border: 1px solid $accent;
+    border: 1px solid $primary;
 }
 QComboBox:disabled {
-    background: rgba(255, 255, 255, 4%);
-    border: 1px solid rgba(255, 255, 255, 10%);
+    border: 1px solid $border;
     color: $disabled_text;
 }
 QComboBox::drop-down {
@@ -98,68 +131,96 @@ QComboBox::down-arrow {
     height: 0;
 }
 QComboBox QAbstractItemView {
-    background: #0f172a;
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 22%);
-    selection-background-color: $blue;
-    selection-color: white;
+    background: $panel;
+    color: $text;
+    border: 1px solid $strong_border;
+    selection-background-color: $primary;
+    selection-color: $text_on_primary;
     outline: none;
 }
 QPushButton {
-    background: rgba(255, 255, 255, 10%);
-    border: 1px solid rgba(255, 255, 255, 24%);
+    background: transparent;
+    border: 1px solid $strong_border;
     border-radius: 8px;
-    padding: 7px 18px;
-    color: white;
+    padding: 8px 16px;
+    color: $text;
+    font-weight: 500;
 }
 QPushButton:hover {
-    background: rgba(255, 255, 255, 18%);
+    background: $surface;
 }
 QPushButton:pressed {
-    background: rgba(255, 255, 255, 6%);
+    background: $background;
 }
 QPushButton:disabled {
-    background: rgba(255, 255, 255, 4%);
-    border: 1px solid rgba(255, 255, 255, 10%);
+    border: 1px solid $border;
     color: $disabled_text;
+    background: transparent;
+}
+QPushButton[emphasis="true"], QPushButton#primaryButton {
+    background: $primary;
+    border: 1px solid $primary;
+    color: $text_on_primary;
+    font-weight: 600;
+}
+QPushButton[emphasis="true"]:hover, QPushButton#primaryButton:hover {
+    background: $primary_hover;
+    border: 1px solid $primary_hover;
+}
+QPushButton[emphasis="true"]:pressed, QPushButton#primaryButton:pressed {
+    background: $primary_pressed;
+    border: 1px solid $primary_pressed;
 }
 QPushButton#primaryButton {
-    background: white;
-    border: 1px solid white;
-    color: $blue;
-    font-weight: 700;
-}
-QPushButton#primaryButton:hover {
-    background: #e0ecff;
-}
-QPushButton#primaryButton:pressed {
-    background: $soft_blue;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
 }
 QPushButton#primaryButton:disabled {
-    background: rgba(255, 255, 255, 12%);
-    border: 1px solid rgba(255, 255, 255, 10%);
+    background: $surface;
+    border: 1px solid $border;
     color: $disabled_text;
 }
+QPushButton#stopButton {
+    background: transparent;
+    border: 1px solid $primary;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+}
+QPushButton#stopButton:hover {
+    background: $surface;
+}
+QLabel#percentLabel {
+    color: $primary;
+    font-size: 12px;
+    font-weight: 600;
+}
 QProgressBar {
-    background: rgba(255, 255, 255, 14%);
+    background: $border;
     border: none;
-    border-radius: 4px;
-    min-height: 8px;
-    max-height: 8px;
+    border-radius: 3px;
+    min-height: 6px;
+    max-height: 6px;
 }
 QProgressBar::chunk {
-    background: white;
-    border-radius: 4px;
+    background: $primary;
+    border-radius: 3px;
 }
 QTableWidget {
-    background: rgba(15, 23, 42, 45%);
-    alternate-background-color: rgba(255, 255, 255, 5%);
+    background: $surface;
     color: $text;
-    gridline-color: rgba(255, 255, 255, 8%);
-    border: 1px solid rgba(255, 255, 255, 14%);
-    border-radius: 10px;
-    selection-background-color: rgba(96, 165, 250, 35%);
-    selection-color: white;
+    gridline-color: transparent;
+    border: 1px solid $border;
+    border-radius: 12px;
+    selection-background-color: $border;
+    selection-color: $text;
+    outline: none;
+}
+QTableWidget::item {
+    padding: 8px 10px;
+    border-bottom: 1px solid $border;
 }
 QTableWidget:disabled {
     color: $disabled_text;
@@ -169,16 +230,13 @@ QHeaderView {
     border: none;
 }
 QHeaderView::section {
-    background: rgba(255, 255, 255, 10%);
-    color: $soft_blue;
-    padding: 8px;
+    background: $surface;
+    color: $secondary_text;
+    padding: 10px;
     border: none;
+    border-bottom: 1px solid $border;
+    font-size: 12px;
     font-weight: 600;
-}
-QHeaderView::section:vertical {
-    background: rgba(255, 255, 255, 6%);
-    padding: 4px 10px;
-    font-weight: 400;
 }
 QHeaderView::section:disabled {
     color: $disabled_text;
@@ -186,15 +244,6 @@ QHeaderView::section:disabled {
 QTableCornerButton::section {
     background: transparent;
     border: none;
-}
-QFrame#metricsPanel {
-    background: rgba(255, 255, 255, 7%);
-    border: 1px solid rgba(255, 255, 255, 14%);
-    border-radius: 12px;
-}
-QFrame#metricsPanel:disabled {
-    background: rgba(255, 255, 255, 3%);
-    border: 1px solid rgba(255, 255, 255, 8%);
 }
 QScrollBar:vertical {
     background: transparent;
@@ -207,7 +256,7 @@ QScrollBar:horizontal {
     margin: 2px;
 }
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-    background: rgba(255, 255, 255, 28%);
+    background: $strong_border;
     border-radius: 4px;
     min-height: 24px;
     min-width: 24px;
@@ -223,10 +272,17 @@ QScrollBar::add-page, QScrollBar::sub-page {
 )
 
 MAIN_WINDOW_STYLE = _MAIN_WINDOW_TEMPLATE.substitute(
-    gradient=DIAGONAL_GRADIENT,
-    text=TEXT_COLOR,
-    disabled_text=DISABLED_TEXT_COLOR,
-    soft_blue=SOFT_BLUE,
-    accent=ACCENT_BLUE,
-    blue=GRADIENT_END,
+    background=branding.BACKGROUND_COLOR,
+    panel=branding.PANEL_COLOR,
+    surface=branding.SURFACE_COLOR,
+    border=branding.BORDER_COLOR,
+    strong_border=branding.STRONG_BORDER_COLOR,
+    text=branding.TEXT_COLOR,
+    label_text=branding.LABEL_TEXT_COLOR,
+    secondary_text=branding.SECONDARY_TEXT_COLOR,
+    disabled_text=branding.DISABLED_TEXT_COLOR,
+    primary=branding.PRIMARY_COLOR,
+    primary_hover=branding.PRIMARY_HOVER_COLOR,
+    primary_pressed=branding.PRIMARY_PRESSED_COLOR,
+    text_on_primary=branding.TEXT_ON_PRIMARY_COLOR,
 )

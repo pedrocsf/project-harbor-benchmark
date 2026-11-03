@@ -5,11 +5,14 @@ from PySide6.QtWidgets import QFrame, QGraphicsDropShadowEffect, QLabel, QMessag
 from presentation.views.branding import (
     APPLICATION_NAME,
     APPLICATION_SUBTITLE,
-    DIAGONAL_GRADIENT,
-    PALE_BLUE,
-    SOFT_BLUE,
+    BORDER_COLOR,
+    PANEL_COLOR,
+    PRIMARY_COLOR,
+    SECONDARY_TEXT_COLOR,
+    STRONG_BORDER_COLOR,
+    TEXT_COLOR,
 )
-from presentation.views.logo_mark import LogoMark
+from presentation.views.logo_image import LogoImage
 
 LOADING_STATUS = "Loading embedding model…"
 SPLASH_WIDTH = 480
@@ -20,14 +23,14 @@ LOADING_BAR_HEIGHT = 6
 LOADING_BAR_CYCLE_MILLISECONDS = 1400
 LOADING_BAR_SEGMENT_RATIO = 0.35
 LOADING_BAR_FRAME_MILLISECONDS = 16
-WHITE = QColor(255, 255, 255)
-TRACK_COLOR = QColor(255, 255, 255, 46)
+BAR_COLOR = QColor(PRIMARY_COLOR)
+TRACK_COLOR = QColor(BORDER_COLOR)
 
 PANEL_STYLE = (
-    "#panel { background: " + DIAGONAL_GRADIENT + "; border-radius: 22px; }"
-    "QLabel#title { color: white; font-size: 30px; font-weight: 700; }"
-    "QLabel#subtitle { color: " + SOFT_BLUE + "; font-size: 14px; }"
-    "QLabel#status { color: " + PALE_BLUE + "; font-size: 12px; }"
+    "#panel { background: " + PANEL_COLOR + "; border: 1px solid " + STRONG_BORDER_COLOR + "; border-radius: 22px; }"
+    "QLabel#title { color: " + TEXT_COLOR + "; font-size: 28px; font-weight: 700; }"
+    "QLabel#subtitle { color: " + SECONDARY_TEXT_COLOR + "; font-size: 14px; }"
+    "QLabel#status { color: " + SECONDARY_TEXT_COLOR + "; font-size: 12px; }"
 )
 
 
@@ -49,7 +52,7 @@ class LoadingBar(QWidget):
         painter.setBrush(TRACK_COLOR)
         painter.drawRoundedRect(QRectF(self.rect()), radius, radius)
         painter.setClipRect(self.rect())
-        painter.setBrush(WHITE)
+        painter.setBrush(BAR_COLOR)
         painter.drawRoundedRect(self._segment_rectangle(), radius, radius)
 
     def _segment_rectangle(self) -> QRectF:
@@ -82,7 +85,7 @@ class SplashScreen(QWidget):
         panel.setGraphicsEffect(self._build_shadow())
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(40, 36, 40, 32)
-        panel_layout.addWidget(LogoMark(LOGO_SIZE), alignment=Qt.AlignmentFlag.AlignHCenter)
+        panel_layout.addWidget(LogoImage(LOGO_SIZE), alignment=Qt.AlignmentFlag.AlignHCenter)
         panel_layout.addSpacing(14)
         panel_layout.addWidget(self._build_label("title", APPLICATION_NAME), alignment=Qt.AlignmentFlag.AlignHCenter)
         panel_layout.addWidget(

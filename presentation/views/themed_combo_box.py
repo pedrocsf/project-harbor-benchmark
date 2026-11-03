@@ -2,7 +2,7 @@ from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QComboBox
 
-from presentation.views.branding import SOFT_BLUE
+from presentation.views.branding import SECONDARY_TEXT_COLOR
 
 CHEVRON_RIGHT_OFFSET = 18
 CHEVRON_HALF_WIDTH = 5.0
@@ -16,7 +16,7 @@ class ThemedComboBox(QComboBox):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor(SOFT_BLUE) if self.isEnabled() else DISABLED_CHEVRON_COLOR
+        color = QColor(SECONDARY_TEXT_COLOR) if self.isEnabled() else DISABLED_CHEVRON_COLOR
         painter.setPen(QPen(color, CHEVRON_LINE_WIDTH, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
         center_x = self.width() - CHEVRON_RIGHT_OFFSET
         center_y = self.height() / 2

@@ -13,11 +13,7 @@ from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
 from domain.scoring.rouge_scoring_methods import RougeLScoringMethod
 from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
 from presentation.views.overview_chart import (
-    MAX_HEATMAP_WIDTH,
-    MIN_TICK_SPACING,
-    PIXEL_RATIO,
     render_overview_chart,
-    tick_step_for,
 )
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -60,19 +56,12 @@ def test_more_metrics_make_the_image_taller(application):
     assert three_metrics.height() > one_metric.height()
 
 
-def test_more_questions_make_the_image_wider(application):
+def test_size_does_not_depend_on_the_number_of_questions(application):
     few_questions = render_overview_chart(build_overview(5))
-    many_questions = render_overview_chart(build_overview(60))
+    many_questions = render_overview_chart(build_overview(1000))
 
-    assert many_questions.width() > few_questions.width()
-
-
-def test_width_stops_growing_at_the_heatmap_limit(application):
-    large = render_overview_chart(build_overview(1000))
-    larger = render_overview_chart(build_overview(5000))
-
-    assert large.width() == larger.width()
-    assert large.width() < (MAX_HEATMAP_WIDTH + 1200) * PIXEL_RATIO
+    assert few_questions.width() == many_questions.width()
+    assert few_questions.height() == many_questions.height()
 
 
 def test_renders_with_a_single_metric_and_a_single_question(application):
@@ -87,17 +76,3 @@ def test_saves_a_valid_png_file(application, tmp_path):
     assert render_overview_chart(build_overview(5)).save(str(destination))
 
     assert destination.read_bytes().startswith(PNG_SIGNATURE)
-
-
-def test_labels_every_question_when_cells_are_wide():
-    assert tick_step_for(cell_width=80) == 1
-
-
-def test_skips_question_numbers_when_cells_are_narrow():
-    assert tick_step_for(cell_width=2) == 50
-    assert tick_step_for(cell_width=24) == 5
-
-
-def test_tick_labels_never_get_closer_than_the_minimum_spacing():
-    for cell_width in (0.5, 1, 2.4, 7, 13, 33, 48, 120):
-        assert tick_step_for(cell_width) * cell_width >= MIN_TICK_SPACING

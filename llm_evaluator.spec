@@ -5,7 +5,7 @@ APP_NAME = "LlmEvaluator"
 analysis = Analysis(
     ["main.py"],
     pathex=["."],
-    datas=[("models", "models")] + collect_data_files("fastembed"),
+    datas=[("models", "models"), ("presentation/assets", "presentation/assets")] + collect_data_files("fastembed"),
     hiddenimports=collect_submodules("sacrebleu"),
     excludes=["tkinter", "pytest"],
 )
