@@ -6,6 +6,10 @@ class LanguageModelError(DomainError):
     pass
 
 
+class JudgeResponseError(LanguageModelError):
+    pass
+
+
 class QuestionsUnavailableError(DomainError):
     pass
 

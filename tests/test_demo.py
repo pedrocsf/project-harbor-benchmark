@@ -3,16 +3,19 @@ from pathlib import Path
 import pytest
 
 from data.scoring.bleu_scoring_method import BleuScoringMethod
+from data.scoring.chrf_scoring_method import ChrfScoringMethod
 from demo.demo_data import DEMO_CORPUS_BLEU_SCORE, DEMO_ENTRIES
 from demo.demo_question_repository import DemoQuestionRepository
 from demo.demo_run_evaluation import DemoRunEvaluation
 from domain.entities.evaluation_request import EvaluationRequest
 from domain.entities.language_model_settings import LanguageModelSettings
 from domain.errors import EvaluationCancelledError
+from domain.scoring.contains_answer_scoring_method import ContainsAnswerScoringMethod
 from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
 from domain.scoring.rouge_scoring_methods import RougeLScoringMethod, RougeNScoringMethod
 from domain.scoring.scoring_method import ScoreKind
 from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
+from domain.scoring.token_recall_scoring_method import TokenRecallScoringMethod
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.load_questions import LoadQuestions
 from domain.usecases.rescore_result import RescoreResult
@@ -31,17 +34,20 @@ def lexical_methods():
     return [
         ExactMatchScoringMethod(),
         TokenF1ScoringMethod(),
+        TokenRecallScoringMethod(),
+        ContainsAnswerScoringMethod(),
         RougeNScoringMethod(1),
         RougeNScoringMethod(2),
         RougeLScoringMethod(),
         BleuScoringMethod(),
+        ChrfScoringMethod(),
     ]
 
 
 def test_every_entry_scores_every_available_method():
-    from main import build_scoring_methods
+    from main import build_language_model_gateway, build_scoring_methods
 
-    identifiers = {method.identifier for method in build_scoring_methods()}
+    identifiers = {method.identifier for method in build_scoring_methods(build_language_model_gateway())}
 
     assert all(set(entry.scores) == identifiers for entry in DEMO_ENTRIES)
 
@@ -65,9 +71,9 @@ def test_every_fixed_score_is_between_zero_and_one():
 
 
 def test_demo_methods_mirror_the_real_ones():
-    from main import build_scoring_methods
+    from main import build_language_model_gateway, build_scoring_methods
 
-    real = [(m.identifier, m.display_name, m.column_header, m.score_kind) for m in build_scoring_methods()]
+    real = [(m.identifier, m.display_name, m.column_header, m.score_kind) for m in build_scoring_methods(build_language_model_gateway())]
     demo = [(m.identifier, m.display_name, m.column_header, m.score_kind) for m in build_demo_methods()]
 
     assert demo == real
@@ -133,3 +139,4 @@ def test_switching_metrics_and_building_the_overview_work_with_the_demo_methods(
     assert [score.score for score in rescored.scores] == [entry.scores["exact_match"] for entry in DEMO_ENTRIES]
     assert [entry.method.identifier for entry in overview.entries] == [method.identifier for method in methods]
     assert rescored.metrics.correct_count == 3
+    assert len(overview.entries) == len(methods)

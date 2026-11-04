@@ -10,11 +10,16 @@ from data.repositories.file_result_repository import FileResultRepository
 from data.repositories.json_question_repository import JsonQuestionRepository
 from data.resource_locator import resolve_resource_path
 from data.scoring.bleu_scoring_method import BleuScoringMethod
+from data.scoring.chrf_scoring_method import ChrfScoringMethod
 from data.scoring.embedding_scoring_method import EmbeddingScoringMethod
+from domain.gateways.language_model_gateway import LanguageModelGateway
+from domain.scoring.contains_answer_scoring_method import ContainsAnswerScoringMethod
 from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
+from domain.scoring.llm_judge_scoring_method import LlmJudgeScoringMethod
 from domain.scoring.rouge_scoring_methods import RougeLScoringMethod, RougeNScoringMethod
 from domain.scoring.scoring_method import ScoringMethod
 from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
+from domain.scoring.token_recall_scoring_method import TokenRecallScoringMethod
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.export_result import ExportResult
 from domain.usecases.load_questions import LoadQuestions
@@ -30,15 +35,19 @@ MODELS_DIRECTORY_NAME = "models"
 STARTUP_FAILURE_EXIT_CODE = 1
 
 
-def build_scoring_methods() -> list[ScoringMethod]:
+def build_scoring_methods(language_model_gateway: LanguageModelGateway) -> list[ScoringMethod]:
     return [
         EmbeddingScoringMethod(resolve_resource_path(MODELS_DIRECTORY_NAME)),
         ExactMatchScoringMethod(),
         TokenF1ScoringMethod(),
+        TokenRecallScoringMethod(),
+        ContainsAnswerScoringMethod(),
         RougeNScoringMethod(1),
         RougeNScoringMethod(2),
         RougeLScoringMethod(),
         BleuScoringMethod(),
+        ChrfScoringMethod(),
+        LlmJudgeScoringMethod(language_model_gateway),
     ]
 
 
@@ -47,11 +56,12 @@ def build_language_model_gateway() -> ProviderRoutingGateway:
 
 
 def build_controllers() -> tuple[StartupController, EvaluationController]:
-    scoring_methods = build_scoring_methods()
+    language_model_gateway = build_language_model_gateway()
+    scoring_methods = build_scoring_methods(language_model_gateway)
     startup_controller = StartupController(PrepareScoringMethods(scoring_methods))
     use_cases = EvaluationUseCases(
         load_questions=LoadQuestions(JsonQuestionRepository()),
-        run_evaluation=RunEvaluation(build_language_model_gateway()),
+        run_evaluation=RunEvaluation(language_model_gateway),
         rescore_result=RescoreResult(),
         build_overview=BuildMetricOverview(),
         export_result=ExportResult(FileResultRepository()),

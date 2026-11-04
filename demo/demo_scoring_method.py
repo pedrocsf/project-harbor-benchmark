@@ -14,6 +14,7 @@ class DemoScoringMethod(ScoringMethod):
         self.display_name = reference.display_name
         self.column_header = reference.column_header
         self.score_kind = reference.score_kind
+        self.uses_language_model = False
         self._scores_by_answers = scores_by_answers
         self._corpus_value = corpus_value
 

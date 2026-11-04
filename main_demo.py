@@ -20,7 +20,7 @@ from domain.usecases.export_result import ExportResult
 from domain.usecases.load_questions import LoadQuestions
 from domain.usecases.prepare_scoring_methods import PrepareScoringMethods
 from domain.usecases.rescore_result import RescoreResult
-from main import build_scoring_methods
+from main import build_language_model_gateway, build_scoring_methods
 from presentation.controllers.evaluation_controller import EvaluationController, EvaluationUseCases
 from presentation.controllers.startup_controller import StartupController
 from presentation.views.main_window import MainWindow, MainWindowOptions
@@ -42,7 +42,7 @@ def build_demo_methods() -> list[ScoringMethod]:
             },
             corpus_value=DEMO_CORPUS_BLEU_SCORE if reference.identifier == BLEU_IDENTIFIER else None,
         )
-        for reference in build_scoring_methods()
+        for reference in build_scoring_methods(build_language_model_gateway())
     ]
 
 

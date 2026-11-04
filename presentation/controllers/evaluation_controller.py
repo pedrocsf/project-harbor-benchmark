@@ -132,6 +132,8 @@ class EvaluationController(QObject):
             api_key=api_key.strip() or None,
             model_name=model_name.strip() or None,
         )
+        for scoring_method in self._scoring_methods:
+            scoring_method.configure(settings)
         request = EvaluationRequest(settings, tuple(self._questions), self._selected_method)
         self._last_result = None
         self._is_rescoring = False

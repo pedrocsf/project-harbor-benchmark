@@ -32,7 +32,7 @@ Project Harbor Benchmark lets a team evaluate different LLM approaches on the sa
 ## Features
 
 - **Fully local scoring.** Point it at an LLM on your machine or a cloud API; the embedding model is bundled, and the dataset is a plain JSON file you choose.
-- **Seven metrics.** Embedding similarity, Exact match, Token F1, ROUGE-1, ROUGE-2, ROUGE-L and BLEU. Switching metric after a run re-scores the stored answers without calling the LLM again.
+- **Eleven metrics.** Embedding similarity, Exact match, Token F1, Token recall, Contains answer, ROUGE-1, ROUGE-2, ROUGE-L, BLEU, chrF++ and an LLM judge. Switching metric after a run re-scores the stored answers without calling the LLM again.
 - **Overview chart.** One PNG with every metric at once: mean, median and a per-question heat map.
 - **Run statistics.** Median, highest and lowest score, response times, empty answers and average answer length.
 - **JSON and CSV export** of every run.
@@ -110,11 +110,15 @@ Every metric compares the LLM answer with `expected_answer` and returns a score 
 | Embedding similarity | Cosine similarity between embeddings (negatives clamp to 0) | Captures meaning and tolerates paraphrase. Multilingual model bundled. |
 | Exact match | 0 or 1 | SQuAD-style normalization: lowercase, no punctuation, no `a`/`an`/`the`, collapsed whitespace. |
 | Token F1 | F1 over normalized tokens | Same normalization as Exact match. Counts repeated tokens. |
+| Token recall | Share of expected tokens found in the answer | Same normalization as Exact match. Does not penalize extra words, so it suits verbose models. |
+| Contains answer | 0 or 1 | The normalized expected answer must appear as whole words inside the answer. |
 | ROUGE-1, ROUGE-2 | F-measure over unigrams and bigrams | Word tokenization (`\w+`), lowercase, no stemming. |
 | ROUGE-L | F-measure over the longest common subsequence | Same tokenization. |
 | BLEU | Sentence BLEU (`sacrebleu`, 0 to 1 scale) | The panel also shows corpus BLEU, the usual translation metric. |
+| chrF++ | Character n-gram F-score (`sacrebleu`, 0 to 1 scale) | Tolerates inflection and accents better than word metrics. |
+| LLM judge | Rating from 0 to 10 given by a model, divided by 10 | Uses the same endpoint, API key and model as the run, one extra call per question. Needs a connection; left out of the overview chart unless the run used it. |
 
-Binary metrics (Exact match) show correct and incorrect counts instead of median, highest and lowest score.
+Binary metrics (Exact match, Contains answer) show correct and incorrect counts instead of median, highest and lowest score.
 
 Things to keep in mind when reading the scores:
 
@@ -136,7 +140,7 @@ domain/             entities, repository and gateway interfaces, use cases,
                     and the pure-Python scoring methods (domain/scoring)
 data/               JSON dataset reader, result exporter, OpenAI-compatible, Anthropic and Gemini HTTP
                     gateways, scoring methods with heavy dependencies
-                    (embedding similarity, BLEU)
+                    (embedding similarity, BLEU, chrF++)
 presentation/
   controllers/      evaluation and startup controllers (background threads)
   views/            splash screen, main window, metrics panel, overview chart,

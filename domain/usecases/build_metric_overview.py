@@ -7,9 +7,13 @@ from domain.scoring.scoring_method import ScoringMethod
 
 class BuildMetricOverview:
     def execute(self, result: EvaluationResult, methods: Sequence[ScoringMethod]) -> MetricOverview:
-        entries = tuple(MetricOverviewEntry(method, self._scores_for(result, method)) for method in methods)
+        included_methods = [method for method in methods if self._is_included(result, method)]
+        entries = tuple(MetricOverviewEntry(method, self._scores_for(result, method)) for method in included_methods)
         questions = tuple(score.question for score in result.scores)
         return MetricOverview(questions, entries, result.evaluated_at)
+
+    def _is_included(self, result: EvaluationResult, method: ScoringMethod) -> bool:
+        return not method.uses_language_model or method.identifier == result.method.identifier
 
     def _scores_for(self, result: EvaluationResult, method: ScoringMethod) -> tuple[float, ...]:
         if method.identifier == result.method.identifier:
