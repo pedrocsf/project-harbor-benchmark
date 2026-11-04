@@ -3,11 +3,13 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget
 from domain.entities.evaluation_metrics import EvaluationMetrics
 from domain.entities.question_score import QuestionScore
 from domain.scoring.scoring_method import ScoreKind, ScoringMethod
+from presentation.views.animations import fade_in
 
 CARDS_PER_ROW = 6
 CARD_SPACING = 12
 CARD_PADDING = 14
 CARD_INNER_SPACING = 6
+CARD_FADE_STAGGER_MILLISECONDS = 45
 EMPTY_VALUE = "—"
 GENERIC_HEADER = "score"
 SCORE_FORMAT = "{:.3f}"
@@ -104,6 +106,8 @@ class MetricsPanel(QWidget):
         self._arrange(order, _captions(method.column_header, method.score_kind))
         for key, text in _format_values(metrics, average_score, method.score_kind).items():
             self._value_labels[key].setText(text)
+        for index, key in enumerate(order):
+            fade_in(self._cards[key], delay_milliseconds=index * CARD_FADE_STAGGER_MILLISECONDS)
 
     def clear(self) -> None:
         self._arrange(_card_order(ScoreKind.CONTINUOUS, has_corpus_score=False), _captions(GENERIC_HEADER))

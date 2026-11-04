@@ -28,12 +28,14 @@ from domain.entities.evaluation_result import EvaluationResult
 from domain.entities.metric_overview import MetricOverview
 from domain.scoring.scoring_method import ScoreKind
 from presentation.controllers.evaluation_controller import EvaluationController
+from presentation.views.animations import build_value_animation, fade_in, fade_in_window
 from presentation.views.branding import (
     ACTIVE_ROW_COLOR,
     APPLICATION_NAME,
     APPLICATION_SUBTITLE,
     DISABLED_TEXT_COLOR,
 )
+from presentation.views.info_dialog import InfoDialog
 from presentation.views.logo_image import LogoImage
 from presentation.views.metrics_panel import MetricsPanel
 from presentation.views.overview_chart import render_overview_chart
@@ -110,6 +112,8 @@ class MainWindow(QMainWindow):
         self._pick_dataset = self._options.dataset_picker or self._pick_dataset_with_dialog
         self._last_directory = Path.home()
         self._pending_chart_destination: Path | None = None
+        self._score_delegate: ScoreBarDelegate | None = None
+        self._info_dialog: InfoDialog | None = None
         self._build_interface()
         self._connect_controller()
         self._show_awaiting_dataset_state()
@@ -138,6 +142,8 @@ class MainWindow(QMainWindow):
         title_label.setObjectName("brandTitle")
         subtitle_label = QLabel(APPLICATION_SUBTITLE)
         subtitle_label.setObjectName("brandSubtitle")
+        self._info_button = QPushButton("Info")
+        self._info_button.clicked.connect(self._on_info_clicked)
         self._export_button = QPushButton("Export…")
         self._chart_button = QPushButton("Export chart…")
         self._export_button.clicked.connect(self._on_export_clicked)
@@ -153,6 +159,7 @@ class MainWindow(QMainWindow):
             badge = QLabel(self._options.badge_text)
             badge.setObjectName("demoBadge")
             layout.addWidget(badge, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._info_button)
         layout.addWidget(self._chart_button)
         layout.addWidget(self._export_button)
         header = QFrame()
@@ -314,6 +321,7 @@ class MainWindow(QMainWindow):
         self._progress_bar = QProgressBar()
         self._progress_bar.setTextVisible(False)
         self._progress_bar.setFixedWidth(PROGRESS_BAR_WIDTH)
+        self._progress_animation = build_value_animation(self._progress_bar, b"value")
         row = QHBoxLayout()
         row.addLayout(titles)
         row.addStretch(1)
@@ -344,7 +352,8 @@ class MainWindow(QMainWindow):
         self._table.setWordWrap(True)
         self._table.setShowGrid(False)
         self._table.verticalHeader().setVisible(False)
-        self._table.setItemDelegateForColumn(SCORE_COLUMN, ScoreBarDelegate(self._table))
+        self._score_delegate = ScoreBarDelegate(self._table)
+        self._table.setItemDelegateForColumn(SCORE_COLUMN, self._score_delegate)
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(NUMBER_COLUMN, QHeaderView.ResizeMode.Fixed)
@@ -392,6 +401,13 @@ class MainWindow(QMainWindow):
         self._controller.select_method(self._method_combo.itemData(index))
         self._set_score_header(self._controller.selected_method.column_header)
         self._metric_title_label.setText(self._controller.selected_method.display_name)
+
+    def _on_info_clicked(self) -> None:
+        if self._info_dialog is None:
+            self._info_dialog = InfoDialog(self)
+        self._info_dialog.show()
+        self._info_dialog.raise_()
+        self._info_dialog.activateWindow()
 
     def _on_export_clicked(self) -> None:
         selected_path, selected_filter = QFileDialog.getSaveFileName(
@@ -444,10 +460,10 @@ class MainWindow(QMainWindow):
         self._set_running_controls(False)
         self._set_exports_enabled(False)
         self._set_results_enabled(False)
-        self._progress_bar.setValue(0)
+        self._reset_progress()
         self._status_label.clear()
         self._set_dataset_summary(NO_DATASET_TEXT, NO_DATASET_HINT, is_empty=True)
-        self._content_stack.setCurrentIndex(EMPTY_STATE_PAGE)
+        self._show_page(EMPTY_STATE_PAGE)
 
     def _show_ready_state(self) -> None:
         self._set_configuration_enabled(True)
@@ -461,7 +477,7 @@ class MainWindow(QMainWindow):
         self._set_running_controls(True, is_cancellable)
         self._set_exports_enabled(False)
         self._clear_results()
-        self._progress_bar.setValue(0)
+        self._reset_progress()
         self._percent_label.setText(PERCENT_FORMAT.format(0))
         self._status_label.setText(status_text)
         if is_cancellable:
@@ -469,19 +485,40 @@ class MainWindow(QMainWindow):
 
     def _show_dataset_loaded(self, source: str, question_count: int) -> None:
         self._clear_results()
-        self._progress_bar.setValue(0)
+        self._reset_progress()
         self._status_label.clear()
         self._set_dataset_summary(Path(source).name, f"{question_count} questions", is_empty=False)
         self._dataset_card.setToolTip(source)
-        self._content_stack.setCurrentIndex(CONTENT_PAGE)
+        self._show_page(CONTENT_PAGE)
         self._show_ready_state()
+
+    def _show_page(self, page_index: int) -> None:
+        if self._content_stack.currentIndex() == page_index:
+            return
+        self._content_stack.setCurrentIndex(page_index)
+        fade_in(self._content_stack.currentWidget())
+
+    def _reset_progress(self) -> None:
+        self._progress_animation.stop()
+        self._progress_bar.setValue(0)
+
+    def _animate_progress(self, value: int) -> None:
+        self._progress_animation.stop()
+        self._progress_animation.setStartValue(self._progress_bar.value())
+        self._progress_animation.setEndValue(value)
+        self._progress_animation.start()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not event.spontaneous():
+            fade_in_window(self)
 
     def _show_dataset_failure(self, message: str) -> None:
         QMessageBox.critical(self, WINDOW_TITLE, message)
 
     def _show_progress(self, completed: int, total: int) -> None:
         self._progress_bar.setMaximum(total)
-        self._progress_bar.setValue(completed)
+        self._animate_progress(completed)
         self._percent_label.setText(PERCENT_FORMAT.format(completed / total))
         self._status_label.setText(f"Running · {completed} of {total} questions")
         self._mark_progress(completed)
@@ -609,3 +646,4 @@ class MainWindow(QMainWindow):
             score_item.setData(SCORE_FRACTION_ROLE, score.score)
             self._table.setItem(row, SCORE_COLUMN, score_item)
         self._table.resizeRowsToContents()
+        self._score_delegate.start_reveal()

@@ -85,6 +85,10 @@ The dataset is a JSON list of questions. See [`examples/questions.example.json`]
 
 `id` is optional; when missing, the position in the list is used. The dataset is never bundled with the app, so your team can share and version it separately.
 
+### Animations
+
+The interface uses short animations (window and page fades, staggered metric cards, growing score bars, smooth progress). Set `HARBOR_REDUCE_MOTION=1` before starting the app to turn them all off.
+
 ### Demo mode
 
 `main_demo.py` opens the same window with 12 sample questions and a simulated run. It makes no network calls. Export and Export chart write real files, but the numbers are sample data and must not be mistaken for real results. The fixed data lives in [`demo/demo_data.py`](demo/demo_data.py).

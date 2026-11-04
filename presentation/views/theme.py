@@ -245,6 +245,54 @@ QTableCornerButton::section {
     background: transparent;
     border: none;
 }
+QDialog#infoDialog, QWidget#infoContent, QScrollArea#infoScroll {
+    background: $background;
+}
+QFrame#infoFooter {
+    background: $panel;
+    border-top: 1px solid $border;
+}
+QFrame#infoCard {
+    background: $surface;
+    border: 1px solid $border;
+    border-radius: 12px;
+}
+QLabel#infoTitle {
+    font-size: 22px;
+    font-weight: 700;
+}
+QLabel#infoSectionTitle {
+    font-size: 18px;
+    font-weight: 600;
+}
+QLabel#infoMetricName {
+    font-size: 15px;
+    font-weight: 600;
+}
+QLabel#infoText {
+    color: $label_text;
+    font-size: 13px;
+}
+QLabel#infoHint, QLabel#infoCaption {
+    color: $secondary_text;
+    font-size: 12px;
+}
+QLabel#infoCaption {
+    font-weight: 600;
+}
+QLabel#infoFormula {
+    background: $background;
+    border: 1px solid $border;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: $text;
+    font-family: monospace;
+    font-size: 12px;
+}
+QLabel#infoPapers {
+    color: $label_text;
+    font-size: 12px;
+}
 QScrollBar:vertical {
     background: transparent;
     width: 10px;
