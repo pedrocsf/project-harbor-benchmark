@@ -11,9 +11,10 @@ from data.repositories.json_question_repository import JsonQuestionRepository
 from data.resource_locator import resolve_resource_path
 from data.scoring.bleu_scoring_method import BleuScoringMethod
 from data.scoring.chrf_scoring_method import ChrfScoringMethod
-from data.scoring.embedding_scoring_method import EmbeddingScoringMethod
+from data.scoring.fastembed_text_encoder import FastEmbedTextEncoder
 from domain.gateways.language_model_gateway import LanguageModelGateway
 from domain.scoring.contains_answer_scoring_method import ContainsAnswerScoringMethod
+from domain.scoring.embedding_scoring_method import EmbeddingScoringMethod
 from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
 from domain.scoring.llm_judge_scoring_method import LlmJudgeScoringMethod
 from domain.scoring.rouge_scoring_methods import RougeLScoringMethod, RougeNScoringMethod
@@ -37,7 +38,7 @@ STARTUP_FAILURE_EXIT_CODE = 1
 
 def build_scoring_methods(language_model_gateway: LanguageModelGateway) -> list[ScoringMethod]:
     return [
-        EmbeddingScoringMethod(resolve_resource_path(MODELS_DIRECTORY_NAME)),
+        EmbeddingScoringMethod(FastEmbedTextEncoder(resolve_resource_path(MODELS_DIRECTORY_NAME))),
         ExactMatchScoringMethod(),
         TokenF1ScoringMethod(),
         TokenRecallScoringMethod(),
