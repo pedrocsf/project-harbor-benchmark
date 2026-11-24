@@ -17,6 +17,7 @@ from demo.demo_run_import_repository import DemoRunImportRepository
 from domain.entities.evaluation_request import EvaluationRequest
 from domain.entities.rag_endpoint_settings import RagEndpointSettings
 from domain.explanations.timeline import TimelinePosition
+from domain.scoring.sample_requirements import MetricGroup
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.build_rag_walkthrough import BuildRagWalkthrough
 from domain.usecases.load_imported_run import LoadImportedRun
@@ -132,6 +133,34 @@ def test_demo_overview_includes_every_metric_after_a_rag_run():
     overview = BuildMetricOverview().execute(rag_result(), methods)
 
     assert [entry.method.identifier for entry in overview.entries] == [method.identifier for method in methods]
+
+
+def test_overview_by_group_keeps_only_the_metrics_of_that_group():
+    methods = build_demo_methods()
+
+    for group in MetricGroup:
+        overview = BuildMetricOverview().execute(rag_result(), methods, group)
+
+        assert overview.group is group
+        assert overview.entries
+        assert all(entry.method.metric_group is group for entry in overview.entries)
+
+
+def test_available_groups_of_a_rag_run_with_labels_cover_the_three_categories():
+    groups = BuildMetricOverview().available_groups(rag_result(), build_demo_methods())
+
+    assert groups == (MetricGroup.ANSWER, MetricGroup.RETRIEVAL, MetricGroup.GROUNDING)
+
+
+def test_available_groups_of_a_run_without_contexts_has_only_the_answer_category():
+    method = methods_by_identifier()["exact_match"]
+    result = DemoRunEvaluation(DEMO_ENTRIES, step_seconds=0, rag_entries=DEMO_RAG_ENTRIES).execute(
+        EvaluationRequest(None, demo_questions(), method)
+    )
+
+    groups = BuildMetricOverview().available_groups(result, build_demo_methods())
+
+    assert groups == (MetricGroup.ANSWER,)
 
 
 def explorer_examples():

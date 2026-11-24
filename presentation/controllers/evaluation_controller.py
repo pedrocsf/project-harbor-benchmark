@@ -19,6 +19,7 @@ from domain.errors import DomainError, EvaluationCancelledError
 from domain.scoring.metric_parameters import InvalidParameterError, ParameterValues
 from domain.scoring.sample_requirements import (
     REQUIREMENT_DESCRIPTIONS,
+    MetricGroup,
     SampleRequirement,
     available_requirements,
     missing_requirements,
@@ -41,6 +42,7 @@ MISSING_DATASET_MESSAGE = "Load a dataset first."
 JUDGE_REQUIRED_MESSAGE = "{name} uses a judge model. Fill in the judge model URL."
 UNAVAILABLE_METRIC_MESSAGE = "{name} is not available. {reason}"
 IMPORT_NOT_SUPPORTED_MESSAGE = "This build cannot import runs."
+NO_OFFLINE_METRICS_MESSAGE = "This category only has metrics that call the judge model."
 RUNNING_STATUS = "Running…"
 SCORING_STATUS = "Scoring…"
 SHUTDOWN_WAIT_MILLISECONDS = 3000
@@ -316,12 +318,30 @@ class EvaluationController(QObject):
             worker.terminate()
             worker.wait()
 
-    def build_overview(self) -> None:
+    def available_chart_groups(self) -> tuple[MetricGroup, ...]:
+        if self._last_result is None:
+            return ()
+        return self._use_cases.build_overview.available_groups(self._last_result, self._scoring_methods)
+
+    def chart_group_unavailable_reason(self, group: MetricGroup) -> str:
+        offline_methods = [
+            method for method in self._scoring_methods if method.metric_group is group and not method.uses_language_model
+        ]
+        if not offline_methods:
+            return NO_OFFLINE_METRICS_MESSAGE
+        closest = min(offline_methods, key=lambda method: len(self.missing_requirements_for(method)))
+        return " ".join(
+            REQUIREMENT_DESCRIPTIONS[requirement] for requirement in self.missing_requirements_for(closest)
+        )
+
+    def build_overview(self, group: MetricGroup | None = None) -> None:
         if self._worker is not None or self._last_result is None:
             return
         result = self._last_result
         self._launch_worker(
-            lambda on_progress, is_cancelled: self._use_cases.build_overview.execute(result, self._scoring_methods),
+            lambda on_progress, is_cancelled: self._use_cases.build_overview.execute(
+                result, self._scoring_methods, group
+            ),
             self._handle_overview_ready,
             self._handle_overview_failed,
         )

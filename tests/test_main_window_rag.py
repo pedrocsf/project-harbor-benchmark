@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 from domain.entities.evaluation_result import EvaluationResult
 from domain.entities.question import Question
@@ -18,6 +18,7 @@ from domain.scoring.llm_judge_scoring_method import LlmJudgeScoringMethod
 from domain.scoring.rag.context_relevance_scoring_method import ContextRelevanceScoringMethod
 from domain.scoring.rag.faithfulness_scoring_method import FaithfulnessScoringMethod
 from domain.scoring.rag.retrieval_scoring_methods import HitRateScoringMethod
+from domain.scoring.sample_requirements import MetricGroup
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.export_result import ExportResult
 from domain.usecases.load_imported_run import LoadImportedRun
@@ -171,3 +172,42 @@ def test_dataset_card_mentions_relevance_labels(application):
     window, _ = build_window()
 
     assert window._dataset_count_label.text() == "2 questions · 2 with relevance labels"
+
+
+def build_result_with_contexts():
+    contexts = (RetrievedContext("geo-1", "Paris é a capital.", 0.82),)
+    return EvaluationResult(
+        (QuestionScore(QUESTIONS[0], "Paris", 1.0, 0.1, contexts), QuestionScore(QUESTIONS[1], "Nilo", 0.0, 0.1, ())),
+        datetime(2026, 11, 24),
+        ExactMatchScoringMethod(),
+    )
+
+
+def test_chart_export_skips_the_dialog_when_there_is_a_single_category(application):
+    window, controller = build_window()
+    controller._last_result = EvaluationResult(
+        (QuestionScore(QUESTIONS[0], "Paris", 1.0, 0.1),), datetime(2026, 11, 24), ExactMatchScoringMethod()
+    )
+
+    assert window._choose_chart_group() is MetricGroup.ANSWER
+
+
+def test_chart_export_asks_for_the_category_when_there_are_several(application, monkeypatch):
+    window, controller = build_window()
+    controller._last_result = build_result_with_contexts()
+    offered = []
+
+    class FakeDialog:
+        def __init__(self, available_groups, unavailable_reason):
+            offered.append(tuple(available_groups))
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def selected_group(self):
+            return MetricGroup.GROUNDING
+
+    monkeypatch.setattr("presentation.views.main_window.ChartCategoryDialog", FakeDialog)
+
+    assert window._choose_chart_group() is MetricGroup.GROUNDING
+    assert offered == [(MetricGroup.ANSWER, MetricGroup.RETRIEVAL)]

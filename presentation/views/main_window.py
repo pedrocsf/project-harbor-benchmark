@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from domain.entities.evaluation_result import EvaluationResult
 from domain.entities.metric_overview import MetricOverview
+from domain.scoring.sample_requirements import MetricGroup
 from domain.scoring.scoring_method import ScoreKind, ScoringMethod
 from presentation.controllers.answer_source import AnswerSource
 from presentation.controllers.evaluation_controller import EvaluationController
@@ -49,6 +51,7 @@ from presentation.views.metric_combo_model import (
 )
 from presentation.views.metric_parameters_dialog import MetricParametersDialog
 from presentation.views.metrics_panel import MetricsPanel
+from presentation.views.chart_category_dialog import ChartCategoryDialog
 from presentation.views.overview_chart import render_overview_chart
 from presentation.views.score_bar_delegate import SCORE_FRACTION_ROLE, ScoreBarDelegate
 from presentation.views.spinner_indicator import SpinnerIndicator
@@ -122,7 +125,7 @@ EXPORT_FILTERS = {"JSON (*.json)": ".json", "CSV (*.csv)": ".csv"}
 DEFAULT_EXPORT_NAME = "result.json"
 CHART_FILTER = "PNG image (*.png)"
 CHART_SUFFIX = ".png"
-DEFAULT_CHART_NAME = "overview.png"
+DEFAULT_CHART_NAME_TEMPLATE = "overview-{group}.png"
 EXPLORER_BUTTON_TEXT = "How it works"
 
 
@@ -648,14 +651,26 @@ class MainWindow(QMainWindow):
         self._controller.export_last_result(destination)
 
     def _on_export_chart_clicked(self) -> None:
+        group = self._choose_chart_group()
+        if group is None:
+            return
         selected_path, _ = QFileDialog.getSaveFileName(
-            self, "Export chart", DEFAULT_CHART_NAME, CHART_FILTER
+            self, "Export chart", DEFAULT_CHART_NAME_TEMPLATE.format(group=group.value), CHART_FILTER
         )
         if not selected_path:
             return
         self._pending_chart_destination = Path(selected_path).with_suffix(CHART_SUFFIX)
         self._show_building_chart_state()
-        self._controller.build_overview()
+        self._controller.build_overview(group)
+
+    def _choose_chart_group(self) -> MetricGroup | None:
+        available_groups = self._controller.available_chart_groups()
+        if len(available_groups) <= 1:
+            return available_groups[0] if available_groups else None
+        dialog = ChartCategoryDialog(available_groups, self._controller.chart_group_unavailable_reason)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.selected_group()
 
     def _show_building_chart_state(self) -> None:
         self._set_configuration_enabled(False)

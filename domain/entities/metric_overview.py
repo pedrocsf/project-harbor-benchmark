@@ -3,6 +3,7 @@ from datetime import datetime
 from statistics import fmean, median
 
 from domain.entities.question import Question
+from domain.scoring.sample_requirements import MetricGroup
 from domain.scoring.scoring_method import ScoringMethod
 
 
@@ -25,3 +26,4 @@ class MetricOverview:
     questions: tuple[Question, ...]
     entries: tuple[MetricOverviewEntry, ...]
     evaluated_at: datetime
+    group: MetricGroup | None = None

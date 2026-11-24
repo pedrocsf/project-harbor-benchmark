@@ -13,7 +13,7 @@ from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
 from domain.scoring.rag.context_overlap_scoring_methods import KPrecisionScoringMethod
 from domain.scoring.rag.faithfulness_scoring_method import FaithfulnessScoringMethod
 from domain.scoring.rag.retrieval_scoring_methods import HitRateScoringMethod
-from domain.scoring.sample_requirements import SampleRequirement
+from domain.scoring.sample_requirements import MetricGroup, SampleRequirement
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.export_result import ExportResult
 from domain.usecases.load_imported_run import LoadImportedRun
@@ -66,10 +66,15 @@ class FakeRagGateway:
         return RagAnswer("Paris", CONTEXTS)
 
 
-def build_controller(questions=LABELLED, run=None, rag_gateway=None, with_import=True):
+class FixedGateway:
+    def ask(self, settings, text, temperature=None):
+        return "Paris"
+
+
+def build_controller(questions=LABELLED, run=None, rag_gateway=None, with_import=True, language_model_gateway=None):
     use_cases = EvaluationUseCases(
         load_questions=LoadQuestions(FixedQuestions(questions)),
-        run_evaluation=RunEvaluation(None, rag_gateway or FakeRagGateway()),
+        run_evaluation=RunEvaluation(language_model_gateway, rag_gateway or FakeRagGateway()),
         rescore_result=RescoreResult(),
         build_overview=BuildMetricOverview(),
         export_result=ExportResult(None),
@@ -243,3 +248,47 @@ def test_changing_the_source_discards_the_last_result(core_application):
 
     assert controller._last_result is None
     assert missing(controller, "hit_rate") == (SampleRequirement.CONTEXTS,)
+
+
+def test_chart_groups_follow_the_contexts_of_the_last_result(core_application):
+    controller = build_controller()
+    assert controller.available_chart_groups() == ()
+    controller.set_answer_source(AnswerSource.RAG_ENDPOINT)
+    controller.select_method("hit_rate")
+
+    controller.start_evaluation("", "", "", RagEndpointInput(url="http://rag"))
+    wait_for_worker(controller)
+
+    assert controller.available_chart_groups() == (
+        MetricGroup.ANSWER,
+        MetricGroup.RETRIEVAL,
+        MetricGroup.GROUNDING,
+    )
+
+
+def test_a_model_run_only_offers_the_answer_chart(core_application):
+    gateway = FixedGateway()
+    controller = build_controller(language_model_gateway=gateway)
+
+    controller.start_evaluation("http://llm", "", "")
+    wait_for_worker(controller)
+
+    assert controller.available_chart_groups() == (MetricGroup.ANSWER,)
+    assert "contexts" in controller.chart_group_unavailable_reason(MetricGroup.RETRIEVAL)
+    assert "contexts" in controller.chart_group_unavailable_reason(MetricGroup.GROUNDING)
+
+
+def test_building_the_overview_for_a_group_only_has_that_group(core_application):
+    controller = build_controller()
+    controller.set_answer_source(AnswerSource.RAG_ENDPOINT)
+    controller.select_method("hit_rate")
+    controller.start_evaluation("", "", "", RagEndpointInput(url="http://rag"))
+    wait_for_worker(controller)
+    ready = record(controller.overview_ready)
+
+    controller.build_overview(MetricGroup.GROUNDING)
+    wait_for_worker(controller)
+
+    overview = ready[0][0]
+    assert overview.group is MetricGroup.GROUNDING
+    assert [entry.method.identifier for entry in overview.entries] == ["k_precision"]

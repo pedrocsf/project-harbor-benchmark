@@ -9,6 +9,7 @@ from PySide6.QtGui import QGuiApplication
 
 from domain.entities.metric_overview import MetricOverview, MetricOverviewEntry
 from domain.entities.question import Question
+from domain.scoring.sample_requirements import MetricGroup
 from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
 from domain.scoring.rouge_scoring_methods import RougeLScoringMethod
 from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
@@ -76,3 +77,11 @@ def test_saves_a_valid_png_file(application, tmp_path):
     assert render_overview_chart(build_overview(5)).save(str(destination))
 
     assert destination.read_bytes().startswith(PNG_SIGNATURE)
+
+
+def test_renders_a_chart_for_each_metric_group(application):
+    for group in MetricGroup:
+        overview = build_overview(5)
+        grouped = MetricOverview(overview.questions, overview.entries, overview.evaluated_at, group)
+
+        assert not render_overview_chart(grouped).isNull()

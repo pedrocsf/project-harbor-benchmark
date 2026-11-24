@@ -269,7 +269,8 @@ QTableCornerButton::section {
     background: transparent;
     border: none;
 }
-QDialog#parametersDialog, QWidget#parametersContent, QScrollArea#parametersScroll {
+QDialog#parametersDialog, QWidget#parametersContent, QScrollArea#parametersScroll,
+QDialog#chartCategoryDialog, QFrame#chartCategoryBody {
     background: $background;
 }
 QFrame#parametersFooter {
@@ -313,9 +314,31 @@ QSpinBox QLineEdit, QDoubleSpinBox QLineEdit {
 QSpinBox:focus, QDoubleSpinBox:focus, QPlainTextEdit:focus {
     border: 1px solid $primary;
 }
-QCheckBox {
+QCheckBox, QRadioButton {
     color: $text;
     spacing: 8px;
+}
+QRadioButton#chartCategoryOption {
+    font-size: 13px;
+    font-weight: 600;
+}
+QRadioButton:disabled {
+    color: $disabled_text;
+}
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 8px;
+    border: 1px solid $strong_border;
+    background: $background;
+}
+QRadioButton::indicator:checked {
+    border: 1px solid $primary;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 $primary, stop:0.5 $primary, stop:0.55 $background, stop:1 $background);
+}
+QRadioButton::indicator:disabled {
+    border: 1px solid $border;
 }
 QCheckBox#parameterCheckbox {
     font-size: 13px;

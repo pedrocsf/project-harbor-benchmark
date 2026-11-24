@@ -90,7 +90,7 @@ In a headless environment, set `QT_QPA_PLATFORM=offscreen` first.
 3. Choose a **Metric** (default: Embedding similarity) and, if you want, adjust it with **Parameters…**.
 4. Choose where the answers come from in **Answers from**. For **Model endpoint**, enter the LLM URL; **API key** and **Model** are optional for local servers, the URL works without `http://`, and the provider is picked from the URL. For **RAG endpoint** or **Imported run**, see [Evaluating RAG systems](#evaluating-rag-systems).
 5. Click **Run benchmark** and follow the progress. The table and the metrics panel fill in when it finishes.
-6. Use **Export…** to save the result as JSON or CSV, and **Export chart…** to save the overview PNG.
+6. Use **Export…** to save the result as JSON or CSV, and **Export chart…** to save an overview PNG. The chart is per category (Answer quality, Retrieval or Grounding in contexts), because each one measures something different; the dialog disables the categories the run cannot support.
 
 Loading a new dataset clears the previous result. Changing the metric or its parameters after a run recalculates the score column immediately from the answers already collected.
 
@@ -106,7 +106,7 @@ Loading a new dataset clears the previous result. Changing the metric or its par
 | **Score table** | One row per question: expected answer, LLM answer and a score bar. Runs with contexts add a **Contexts** column with the count; hover it to see ids, retrieval scores and text. |
 | **How it works** | Demo only. Opens the animated metric explorer. |
 | **Info** | Formulas, parameters and references for every metric. |
-| **Export…** / **Export chart…** | JSON or CSV of the run, and the overview PNG. |
+| **Export…** / **Export chart…** | JSON or CSV of the run, and one overview PNG per metric category. |
 
 ### Dataset format
 

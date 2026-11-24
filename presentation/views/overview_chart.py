@@ -14,6 +14,7 @@ from presentation.views.branding import (
     PRIMARY_COLOR,
     SECONDARY_TEXT_COLOR,
 )
+from presentation.views.metric_combo_model import GROUP_TITLES
 from presentation.views.resources import resolve_asset_path
 
 PIXEL_RATIO = 2
@@ -69,7 +70,7 @@ def render_overview_chart(overview: MetricOverview) -> QImage:
     _draw_background(painter, geometry)
     _draw_header(painter, overview)
     _draw_panel(painter, geometry.panel)
-    _draw_panel_titles(painter, geometry)
+    _draw_panel_titles(painter, geometry, overview)
     _draw_bar_grid(painter, geometry)
     for index, entry in enumerate(overview.entries):
         center_y = geometry.plot_top + ROW_SLOT_HEIGHT * (index + 0.5)
@@ -131,7 +132,8 @@ def _draw_header(painter: QPainter, overview: MetricOverview) -> None:
     painter.drawText(QPointF(text_left, 74), APPLICATION_NAME)
     painter.setPen(SOFT_TEXT_COLOR)
     _set_font(painter, 20)
-    subtitle = f"Metric overview · {len(overview.questions)} questions · {overview.evaluated_at:%Y-%m-%d %H:%M}"
+    title = GROUP_TITLES[overview.group] if overview.group is not None else "Metric overview"
+    subtitle = f"{title} · {len(overview.questions)} questions · {overview.evaluated_at:%Y-%m-%d %H:%M}"
     painter.drawText(QPointF(text_left, 104), subtitle)
 
 
@@ -141,11 +143,17 @@ def _draw_panel(painter: QPainter, rect: QRectF) -> None:
     painter.drawRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
 
 
-def _draw_panel_titles(painter: QPainter, geometry: _Geometry) -> None:
+def _panel_title(overview: MetricOverview) -> str:
+    if overview.group is None:
+        return "Performance per metric"
+    return f"{GROUP_TITLES[overview.group]} per metric"
+
+
+def _draw_panel_titles(painter: QPainter, geometry: _Geometry, overview: MetricOverview) -> None:
     inner = geometry.panel.adjusted(PANEL_PADDING, PANEL_PADDING, -PANEL_PADDING, -PANEL_PADDING)
     painter.setPen(LIGHT_TEXT_COLOR)
     _set_font(painter, 24, bold=True)
-    painter.drawText(QPointF(inner.left(), inner.top() + 24), "Performance per metric")
+    painter.drawText(QPointF(inner.left(), inner.top() + 24), _panel_title(overview))
     painter.setPen(SOFT_TEXT_COLOR)
     _set_font(painter, 15)
     painter.drawText(
