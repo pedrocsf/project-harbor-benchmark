@@ -9,6 +9,8 @@ REQUEST_TIMEOUT_SECONDS = 300.0
 MESSAGES_PATH = "/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 MAX_OUTPUT_TOKENS = 4096
+MINIMUM_TEMPERATURE = 0.0
+MAXIMUM_TEMPERATURE = 1.0
 TEXT_BLOCK_TYPE = "text"
 MODEL_REQUIRED_MESSAGE = "Anthropic requires the Model field."
 
@@ -20,26 +22,31 @@ def _build_headers(settings: LanguageModelSettings) -> dict:
     return headers
 
 
-def _build_payload(settings: LanguageModelSettings, question_text: str) -> dict:
-    return {
+def _build_payload(settings: LanguageModelSettings, question_text: str, temperature: float | None) -> dict:
+    payload = {
         "model": settings.model_name,
         "max_tokens": MAX_OUTPUT_TOKENS,
         "messages": [{"role": "user", "content": question_text}],
     }
+    if temperature is not None:
+        payload["temperature"] = min(max(temperature, MINIMUM_TEMPERATURE), MAXIMUM_TEMPERATURE)
+    return payload
 
 
 class AnthropicGateway(LanguageModelGateway):
     def __init__(self, client: httpx.Client | None = None):
         self._client = client or httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS)
 
-    def ask(self, settings: LanguageModelSettings, question_text: str) -> str:
+    def ask(
+        self, settings: LanguageModelSettings, question_text: str, temperature: float | None = None
+    ) -> str:
         if not settings.model_name:
             raise LanguageModelError(MODEL_REQUIRED_MESSAGE)
         url = with_default_path(normalize_url(settings.endpoint_url, HTTPS_URL_SCHEME), MESSAGES_PATH)
         response = post_json(
             self._client,
             url,
-            _build_payload(settings, question_text),
+            _build_payload(settings, question_text, temperature),
             _build_headers(settings),
         )
         return self._extract_answer(response)

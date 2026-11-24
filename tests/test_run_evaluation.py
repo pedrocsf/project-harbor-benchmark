@@ -18,7 +18,7 @@ class FakeGateway(LanguageModelGateway):
     def __init__(self):
         self.received_questions = []
 
-    def ask(self, settings, question_text):
+    def ask(self, settings, question_text, temperature=None):
         self.received_questions.append(question_text)
         return f"resposta para {question_text}"
 

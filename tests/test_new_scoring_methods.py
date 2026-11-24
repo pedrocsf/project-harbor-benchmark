@@ -22,7 +22,7 @@ class FakeGateway(LanguageModelGateway):
         self.reply = reply
         self.prompts = []
 
-    def ask(self, settings, question_text):
+    def ask(self, settings, question_text, temperature=None):
         self.prompts.append(question_text)
         return self.reply
 

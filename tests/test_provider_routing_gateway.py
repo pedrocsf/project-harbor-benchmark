@@ -9,7 +9,8 @@ class NamedGateway(LanguageModelGateway):
     def __init__(self, name):
         self._name = name
 
-    def ask(self, settings, question_text):
+    def ask(self, settings, question_text, temperature=None):
+        self.temperature = temperature
         return self._name
 
 

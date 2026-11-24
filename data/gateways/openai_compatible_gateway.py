@@ -14,10 +14,12 @@ def _build_headers(settings: LanguageModelSettings) -> dict:
     return {"Authorization": f"Bearer {settings.api_key}"}
 
 
-def _build_payload(settings: LanguageModelSettings, question_text: str) -> dict:
+def _build_payload(settings: LanguageModelSettings, question_text: str, temperature: float | None) -> dict:
     payload = {"messages": [{"role": "user", "content": question_text}]}
     if settings.model_name:
         payload["model"] = settings.model_name
+    if temperature is not None:
+        payload["temperature"] = temperature
     return payload
 
 
@@ -25,11 +27,13 @@ class OpenAiCompatibleGateway(LanguageModelGateway):
     def __init__(self, client: httpx.Client | None = None):
         self._client = client or httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS)
 
-    def ask(self, settings: LanguageModelSettings, question_text: str) -> str:
+    def ask(
+        self, settings: LanguageModelSettings, question_text: str, temperature: float | None = None
+    ) -> str:
         response = post_json(
             self._client,
             normalize_url(settings.endpoint_url),
-            _build_payload(settings, question_text),
+            _build_payload(settings, question_text, temperature),
             _build_headers(settings),
         )
         return self._extract_answer(response)

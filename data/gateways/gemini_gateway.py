@@ -16,19 +16,24 @@ def _build_headers(settings: LanguageModelSettings) -> dict:
     return {"x-goog-api-key": settings.api_key}
 
 
-def _build_payload(question_text: str) -> dict:
-    return {"contents": [{"role": "user", "parts": [{"text": question_text}]}]}
+def _build_payload(question_text: str, temperature: float | None) -> dict:
+    payload = {"contents": [{"role": "user", "parts": [{"text": question_text}]}]}
+    if temperature is not None:
+        payload["generationConfig"] = {"temperature": temperature}
+    return payload
 
 
 class GeminiGateway(LanguageModelGateway):
     def __init__(self, client: httpx.Client | None = None):
         self._client = client or httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS)
 
-    def ask(self, settings: LanguageModelSettings, question_text: str) -> str:
+    def ask(
+        self, settings: LanguageModelSettings, question_text: str, temperature: float | None = None
+    ) -> str:
         response = post_json(
             self._client,
             self._resolve_url(settings),
-            _build_payload(question_text),
+            _build_payload(question_text, temperature),
             _build_headers(settings),
         )
         return self._extract_answer(response)

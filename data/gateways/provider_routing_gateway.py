@@ -20,8 +20,10 @@ class ProviderRoutingGateway(LanguageModelGateway):
         self._anthropic_gateway = anthropic_gateway
         self._gemini_gateway = gemini_gateway
 
-    def ask(self, settings: LanguageModelSettings, question_text: str) -> str:
-        return self._select_gateway(settings.endpoint_url).ask(settings, question_text)
+    def ask(
+        self, settings: LanguageModelSettings, question_text: str, temperature: float | None = None
+    ) -> str:
+        return self._select_gateway(settings.endpoint_url).ask(settings, question_text, temperature)
 
     def _select_gateway(self, endpoint_url: str) -> LanguageModelGateway:
         parts = urlsplit(normalize_url(endpoint_url))
