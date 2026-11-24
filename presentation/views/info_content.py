@@ -5,10 +5,12 @@ from dataclasses import dataclass
 class PaperReference:
     citation: str
     url: str
+    coverage: str
 
 
 @dataclass(frozen=True)
 class MetricInfo:
+    identifier: str
     name: str
     formula: str
     explanation: str
@@ -27,209 +29,243 @@ PROJECT_NOTES = (
     "the LLM judge, which calls your model endpoint. Cloud providers need a connection. Changing the metric after a run re-scores the stored answers "
     "without calling the model again."
 )
-METRICS_TITLE = "Metrics and original papers"
+METRICS_TITLE = "Metrics and reference works"
 METRICS_INTRO = (
-    "Each metric below was proposed in the work cited under it. The implementations in this app "
-    "follow those definitions; the formulas are shown in a simplified form."
+    "The works cited under each metric define or study that metric itself; papers that merely "
+    "use it are left out. Every metric is configurable: the defaults reproduce the classic "
+    "definition, and the parameters listed in each card can be changed from the main window."
 )
+PARAMETERS_CAPTION = "Parameters"
+PAPERS_CAPTION = "Reference works"
 
 METRIC_INFOS = (
     MetricInfo(
-        name="Embedding similarity",
-        formula="score = max(0, cos(E(expected), E(answer)))",
+        identifier='embedding',
+        name='Embedding similarity',
+        formula='score = clip(sim(E(expected), E(answer)))  or  (sim + 1) / 2',
         explanation=(
-            "Both texts are mapped to dense vectors by a multilingual sentence encoder "
-            "(paraphrase-multilingual-MiniLM-L12-v2) and compared with cosine similarity, so "
-            "answers with the same meaning but different words score high. Negative values are "
-            "clipped to 0 and an empty answer scores 0."
+            'Both texts are encoded by a multilingual sentence encoder and compared with the chosen similarity: cosine, dot product, angular, Euclidean or Manhattan (the last two as 1 / (1 + distance)). Cosine and dot product can be negative, so they are clipped to 0 or rescaled to 0-1. Defaults (cosine, clip) give the classic clipped cosine similarity. An empty answer scores 0.'
         ),
         papers=(
             PaperReference(
-                "Reimers & Gurevych (2019). Sentence-BERT: Sentence Embeddings using Siamese "
-                "BERT-Networks. EMNLP-IJCNLP 2019.",
-                "https://arxiv.org/abs/1908.10084",
+                'Reimers & Gurevych (2019). Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks. EMNLP-IJCNLP.',
+                'https://aclanthology.org/D19-1410/',
+                'Defines the sentence embeddings compared with cosine similarity.',
             ),
             PaperReference(
-                "Reimers & Gurevych (2020). Making Monolingual Sentence Embeddings Multilingual "
-                "using Knowledge Distillation. EMNLP 2020.",
-                "https://arxiv.org/abs/2004.09813",
-            ),
-            PaperReference(
-                "Wang et al. (2020). MiniLM: Deep Self-Attention Distillation for Task-Agnostic "
-                "Compression of Pre-Trained Transformers. NeurIPS 2020.",
-                "https://arxiv.org/abs/2002.10957",
+                "Steck, Ekanadham & Kallus (2024). Is Cosine-Similarity of Embeddings Really About Similarity? WWW '24 Companion.",
+                'https://arxiv.org/abs/2403.05440',
+                'Analyzes when cosine similarity of embeddings is and is not a sound similarity.',
             ),
         ),
     ),
     MetricInfo(
-        name="Exact match",
-        formula="score = 1 if normalize(answer) == normalize(expected) else 0",
+        identifier='exact_match',
+        name='Exact match',
+        formula='score = 1 if normalize(answer) == normalize(expected) else 0',
         explanation=(
-            "The strictest metric: the answer must equal the expected one after lowercasing and "
-            "removing punctuation and articles. It is binary (correct or incorrect)."
+            'Binary: the answer must equal the expected one after the selected normalization (lowercase, strip accents, remove punctuation, drop English and/or Portuguese articles). Each step can be turned off; the defaults reproduce the classic SQuAD-style normalization.'
         ),
         papers=(
             PaperReference(
-                "Rajpurkar et al. (2016). SQuAD: 100,000+ Questions for Machine Comprehension of "
-                "Text. EMNLP 2016.",
-                "https://arxiv.org/abs/1606.05250",
+                'Chen, Stanovsky, Singh & Gardner (2019). Evaluating Question Answering Evaluation. MRQA@EMNLP.',
+                'https://aclanthology.org/D19-5817/',
+                'Examines exact match as an answer-equivalence measure.',
+            ),
+            PaperReference(
+                'Bulian et al. (2022). Tomayto, Tomahto. Beyond Token-level Answer Equivalence for Question Answering Evaluation. EMNLP.',
+                'https://aclanthology.org/2022.emnlp-main.20/',
+                'Shows where token-level matching disagrees with answer equivalence.',
             ),
         ),
     ),
     MetricInfo(
-        name="Token F1",
-        formula="F1 = 2 · P · R / (P + R),  P = shared / |answer|,  R = shared / |expected|",
+        identifier='token_f1',
+        name='Token F1',
+        formula='F-beta = (1 + β²) · P · R / (β² · P + R),  P = shared / |answer|,  R = shared / |expected|',
         explanation=(
-            "Treats both texts as bags of normalized tokens and computes the harmonic mean of "
-            "precision and recall of the shared tokens. It rewards partial overlap, unlike "
-            "exact match. The token-level F1 for answers comes from SQuAD; the F-measure itself "
-            "comes from information retrieval."
+            'Bags of normalized tokens are compared; the F-beta score combines precision and recall of the shared tokens and rewards partial overlap. Normalization steps are options. β = 1 (default) is the classic balanced F1; higher β favors recall.'
         ),
         papers=(
             PaperReference(
-                "Rajpurkar et al. (2016). SQuAD: 100,000+ Questions for Machine Comprehension of "
-                "Text. EMNLP 2016.",
-                "https://arxiv.org/abs/1606.05250",
+                'Christen, Hand & Kirielle (2024). A Review of the F-Measure: Its History, Properties, Criticism, and Alternatives. ACM Computing Surveys 56(3).',
+                'https://doi.org/10.1145/3606367',
+                'Reviews the F-measure, including its beta weighting.',
             ),
             PaperReference(
-                "van Rijsbergen (1979). Information Retrieval, 2nd ed. Butterworths (origin of "
-                "the F-measure).",
-                "https://www.dcs.gla.ac.uk/Keith/Preface.html",
+                'Chen, Stanovsky, Singh & Gardner (2019). Evaluating Question Answering Evaluation. MRQA@EMNLP.',
+                'https://aclanthology.org/D19-5817/',
+                'Studies token-level F1 for evaluating question answering.',
             ),
         ),
     ),
     MetricInfo(
-        name="Token recall",
-        formula="R = shared / |expected|",
+        identifier='token_recall',
+        name='Token recall',
+        formula='R = shared / |expected|',
         explanation=(
-            "The share of the expected answer's normalized tokens that also appear in the answer. "
-            "Unlike Token F1 it does not penalize extra words, so a correct but verbose answer "
-            "still scores high. It can be fooled by very long answers that repeat many words."
+            "The share of the expected answer's normalized tokens that also appear in the answer. It does not penalize extra words, so verbose correct answers score high, but very long answers can game it. Normalization steps are options; the defaults match the classic setup."
         ),
         papers=(
             PaperReference(
-                "Rajpurkar et al. (2016). SQuAD: 100,000+ Questions for Machine Comprehension of "
-                "Text. EMNLP 2016 (answer normalization and token-level overlap).",
-                "https://arxiv.org/abs/1606.05250",
-            ),
-            PaperReference(
-                "van Rijsbergen (1979). Information Retrieval, 2nd ed. Butterworths (origin of "
-                "precision and recall as used here).",
-                "https://www.dcs.gla.ac.uk/Keith/Preface.html",
+                'Adlakha et al. (2024). Evaluating Correctness and Faithfulness of Instruction-Following Models for Question Answering. TACL 12.',
+                'https://aclanthology.org/2024.tacl-1.38/',
+                'Uses token recall to judge correctness of instruction-following models.',
             ),
         ),
     ),
     MetricInfo(
-        name="Contains answer",
-        formula="score = 1 if normalize(expected) appears inside normalize(answer) else 0",
+        identifier='contains_answer',
+        name='Contains answer',
+        formula='score = 1 if normalize(expected) appears in normalize(answer) else 0',
         explanation=(
-            "Binary check that the expected answer appears, as whole words, anywhere in the "
-            "answer. It forgives verbosity but fails when the model answers correctly in other "
-            "words. There is no single original paper; this substring accuracy is the usual "
-            "way open-domain QA work scores free-form answers from language models."
+            'Binary check that the expected answer appears in the answer, either as whole words (default) or as a plain substring. It forgives verbosity but fails when the model answers correctly in other words. Normalization steps are options.'
         ),
         papers=(
             PaperReference(
-                "Mallen et al. (2023). When Not to Trust Language Models: Investigating "
-                "Effectiveness of Parametric and Non-Parametric Memories. ACL 2023.",
-                "https://arxiv.org/abs/2212.10511",
+                'Adlakha et al. (2024). Evaluating Correctness and Faithfulness of Instruction-Following Models for Question Answering. TACL 12.',
+                'https://aclanthology.org/2024.tacl-1.38/',
+                'Defines the strict recall variant where the answer contains the reference.',
+            ),
+            PaperReference(
+                'Kamalloo, Dziri, Clarke & Rafiei (2023). Evaluating Open-Domain Question Answering in the Era of Large Language Models. ACL.',
+                'https://aclanthology.org/2023.acl-long.307/',
+                'Studies match-based evaluation of open-domain answers against human judgment.',
             ),
         ),
     ),
     MetricInfo(
-        name="ROUGE-1 and ROUGE-2",
-        formula="ROUGE-N = F1 over overlapping n-grams (N = 1 unigrams, N = 2 bigrams)",
+        identifier='rouge_1',
+        name='ROUGE-1',
+        formula='ROUGE-1 = F-beta over overlapping unigrams',
         explanation=(
-            "Counts the n-grams that the answer and the expected text share and reports the "
-            "F-measure of that overlap. ROUGE-1 looks at single words, ROUGE-2 at pairs of "
-            "consecutive words, so it is more sensitive to word order."
+            'Counts overlapping unigrams between answer and reference and reports precision, recall or the F-measure (F-beta). ROUGE-1 looks at single words. Defaults (F-measure, β = 1, lowercase) give the classic ROUGE F1.'
         ),
         papers=(
             PaperReference(
-                "Lin (2004). ROUGE: A Package for Automatic Evaluation of Summaries. ACL Workshop "
-                "Text Summarization Branches Out.",
-                "https://aclanthology.org/W04-1013/",
+                'Lin (2004). ROUGE: A Package for Automatic Evaluation of Summaries. Text Summarization Branches Out.',
+                'https://aclanthology.org/W04-1013/',
+                'Defines the ROUGE family.',
+            ),
+            PaperReference(
+                'Grusky (2023). Rogue Scores. ACL.',
+                'https://aclanthology.org/2023.acl-long.107/',
+                'Critically examines how ROUGE is implemented and reported.',
             ),
         ),
     ),
     MetricInfo(
-        name="ROUGE-L",
-        formula="ROUGE-L = F1 with LCS: P = LCS / |answer|,  R = LCS / |expected|",
+        identifier='rouge_2',
+        name='ROUGE-2',
+        formula='ROUGE-2 = F-beta over overlapping bigrams',
         explanation=(
-            "Uses the longest common subsequence (LCS) between the two texts: words must appear "
-            "in the same order but do not need to be adjacent, which captures sentence-level "
-            "structure without fixing an n-gram size."
+            'Counts overlapping bigrams between answer and reference and reports precision, recall or the F-measure (F-beta). ROUGE-2 looks at pairs of consecutive words, so it is sensitive to word order. Defaults (F-measure, β = 1, lowercase) give the classic ROUGE F1.'
         ),
         papers=(
             PaperReference(
-                "Lin (2004). ROUGE: A Package for Automatic Evaluation of Summaries. ACL Workshop "
-                "Text Summarization Branches Out.",
-                "https://aclanthology.org/W04-1013/",
+                'Lin (2004). ROUGE: A Package for Automatic Evaluation of Summaries. Text Summarization Branches Out.',
+                'https://aclanthology.org/W04-1013/',
+                'Defines the ROUGE family.',
+            ),
+            PaperReference(
+                'Grusky (2023). Rogue Scores. ACL.',
+                'https://aclanthology.org/2023.acl-long.107/',
+                'Critically examines how ROUGE is implemented and reported.',
             ),
         ),
     ),
     MetricInfo(
-        name="BLEU",
-        formula="BLEU = BP · exp( Σ wₙ · log pₙ ),  n = 1..4,  BP = min(1, e^(1 − r/c))",
+        identifier='rouge_l',
+        name='ROUGE-L',
+        formula='ROUGE-L = F-beta with LCS: P = LCS / |answer|,  R = LCS / |expected|',
         explanation=(
-            "Combines the modified n-gram precisions pₙ (from unigrams to 4-grams) with a brevity "
-            "penalty BP that punishes answers shorter than the reference. The app uses the "
-            "SacreBLEU implementation, which fixes tokenization so scores are comparable, and "
-            "also shows a corpus-level BLEU for the whole run."
+            'Uses the longest common subsequence: words must appear in the same order but need not be adjacent. Reports precision, recall or the F-measure (F-beta). Defaults (F-measure, β = 1, lowercase) give the classic ROUGE-L.'
         ),
         papers=(
             PaperReference(
-                "Papineni et al. (2002). BLEU: a Method for Automatic Evaluation of Machine "
-                "Translation. ACL 2002.",
-                "https://aclanthology.org/P02-1040/",
+                'Lin & Och (2004). Automatic Evaluation of Machine Translation Quality Using Longest Common Subsequence and Skip-Bigram Statistics. ACL.',
+                'https://aclanthology.org/P04-1077/',
+                'Introduces the longest-common-subsequence statistic behind ROUGE-L.',
             ),
             PaperReference(
-                "Post (2018). A Call for Clarity in Reporting BLEU Scores. WMT 2018.",
-                "https://arxiv.org/abs/1804.08771",
+                'Lin (2004). ROUGE: A Package for Automatic Evaluation of Summaries. Text Summarization Branches Out.',
+                'https://aclanthology.org/W04-1013/',
+                'Defines the ROUGE family.',
             ),
         ),
     ),
     MetricInfo(
-        name="chrF++",
-        formula="chrF++ = (1 + β²) · P · R / (β² · P + R),  β = 2,  over character 1-6 grams and word 1-2 grams",
+        identifier='bleu',
+        name='BLEU',
+        formula='BLEU = BP · exp( Σ wₙ · log pₙ ),  n = 1..N,  BP = min(1, e^(1 − r/c))',
         explanation=(
-            "An F-score over character n-grams (plus word unigrams and bigrams in the ++ "
-            "variant) that weights recall twice as much as precision. Because it works on "
-            "characters, it tolerates plural, conjugation and accent differences better than "
-            "word-based metrics, which helps with Portuguese. The app uses the SacreBLEU "
-            "implementation."
+            'Combines modified n-gram precisions up to a maximum order N with a brevity penalty for answers shorter than the reference. Options cover the smoothing method, tokenizer, case and effective order. Defaults (N = 4, exponential smoothing, 13a tokenizer) follow SacreBLEU; a corpus-level BLEU is also shown for the run.'
         ),
         papers=(
             PaperReference(
-                "Popović (2015). chrF: character n-gram F-score for automatic MT evaluation. "
-                "WMT 2015.",
-                "https://aclanthology.org/W15-3049/",
+                'Papineni et al. (2002). BLEU: a Method for Automatic Evaluation of Machine Translation. ACL.',
+                'https://aclanthology.org/P02-1040/',
+                'Defines BLEU, its n-gram precisions and brevity penalty.',
             ),
             PaperReference(
-                "Popović (2017). chrF++: words helping character n-grams. WMT 2017.",
-                "https://aclanthology.org/W17-4770/",
+                'Chen & Cherry (2014). A Systematic Comparison of Smoothing Techniques for Sentence-Level BLEU. WMT.',
+                'https://aclanthology.org/W14-3346/',
+                'Compares the smoothing methods offered for sentence-level BLEU.',
             ),
             PaperReference(
-                "Post (2018). A Call for Clarity in Reporting BLEU Scores. WMT 2018 (SacreBLEU).",
-                "https://arxiv.org/abs/1804.08771",
+                'Post (2018). A Call for Clarity in Reporting BLEU Scores. WMT.',
+                'https://aclanthology.org/W18-6319/',
+                'Explains why tokenization must be fixed, motivating SacreBLEU.',
+            ),
+            PaperReference(
+                'Callison-Burch, Osborne & Koehn (2006). Re-evaluating the Role of Bleu in Machine Translation Research. EACL.',
+                'https://aclanthology.org/E06-1032/',
+                'Discusses the limits of BLEU as a quality measure.',
             ),
         ),
     ),
     MetricInfo(
-        name="LLM judge",
-        formula="score = rating(judge(expected, answer)) / 10,  rating in 0..10",
+        identifier='chrf',
+        name='chrF++',
+        formula='chrF = (1 + β²) · P · R / (β² · P + R),  over character n-grams up to N and word n-grams up to M',
         explanation=(
-            "A language model is asked to grade how correct the answer is compared with the "
-            "expected one, ignoring style and length. It is the closest to human judgment for "
-            "open answers, but it makes one extra model call per question, needs a connection to "
-            "the endpoint you configured (the same one is used as the judge), and inherits the "
-            "judge's biases. It is left out of the overview chart unless the run used it."
+            'An F-score over character n-grams (plus word n-grams) that weights recall β times more than precision. It tolerates plural, conjugation and accent differences, which helps with Portuguese. Defaults (character order 6, word order 2, β = 2) give chrF++; word order 0 gives plain chrF.'
         ),
         papers=(
             PaperReference(
-                "Zheng et al. (2023). Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. "
-                "NeurIPS 2023.",
-                "https://arxiv.org/abs/2306.05685",
+                'Popović (2015). chrF: character n-gram F-score for automatic MT evaluation. WMT.',
+                'https://aclanthology.org/W15-3049/',
+                'Defines the character n-gram F-score.',
+            ),
+            PaperReference(
+                'Popović (2016). chrF deconstructed: beta parameters and n-gram weights. WMT.',
+                'https://aclanthology.org/W16-2341/',
+                'Studies the beta parameter and n-gram weights.',
+            ),
+            PaperReference(
+                'Popović (2017). chrF++: words helping character n-grams. WMT.',
+                'https://aclanthology.org/W17-4770/',
+                'Adds word n-grams to chrF, giving chrF++.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='llm_judge',
+        name='LLM judge',
+        formula='score = mean(rating_i) / N,  rating in 0..N,  i = 1..samples',
+        explanation=(
+            'A language model grades how correct the answer is against the expected one. The rating scale N, the prompt, the number of samples (ratings are averaged) and the temperature are configurable. It costs extra model calls, uses the configured endpoint as judge and inherits its biases. Defaults: N = 10, one sample.'
+        ),
+        papers=(
+            PaperReference(
+                'Zheng et al. (2023). Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. NeurIPS Datasets and Benchmarks.',
+                'https://arxiv.org/abs/2306.05685',
+                'Studies LLM judges and their agreement with humans, including biases.',
+            ),
+            PaperReference(
+                'Gu et al. (2024). A Survey on LLM-as-a-Judge.',
+                'https://arxiv.org/abs/2411.15594',
+                'Surveys how LLM judges are built and assessed.',
             ),
         ),
     ),

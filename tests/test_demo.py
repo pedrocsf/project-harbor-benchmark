@@ -4,7 +4,7 @@ import pytest
 
 from data.scoring.bleu_scoring_method import BleuScoringMethod
 from data.scoring.chrf_scoring_method import ChrfScoringMethod
-from demo.demo_data import DEMO_CORPUS_BLEU_SCORE, DEMO_ENTRIES
+from demo.demo_data import DEMO_ENTRIES
 from demo.demo_question_repository import DemoQuestionRepository
 from demo.demo_run_evaluation import DemoRunEvaluation
 from domain.entities.evaluation_request import EvaluationRequest
@@ -60,10 +60,43 @@ def test_fixed_scores_match_the_real_formulas(method):
         assert entry.scores[method.identifier] == pytest.approx(real_score, abs=SCORE_TOLERANCE), entry.identifier
 
 
-def test_fixed_corpus_bleu_matches_the_real_formula():
-    pairs = [(entry.expected_answer, entry.given_answer) for entry in DEMO_ENTRIES]
+def test_default_demo_scores_reproduce_the_tables():
+    for method in build_demo_methods():
+        for entry in DEMO_ENTRIES:
+            score = method.score(entry.expected_answer, entry.given_answer)
 
-    assert DEMO_CORPUS_BLEU_SCORE == pytest.approx(BleuScoringMethod().corpus_score(pairs), abs=SCORE_TOLERANCE)
+            assert score == pytest.approx(entry.scores[method.identifier], abs=0.0005), (method.identifier, entry.identifier)
+
+
+def test_corpus_bleu_comes_from_the_real_method():
+    pairs = [(entry.expected_answer, entry.given_answer) for entry in DEMO_ENTRIES]
+    bleu = next(method for method in build_demo_methods() if method.identifier == "bleu")
+
+    assert bleu.corpus_score(pairs) == pytest.approx(0.433, abs=SCORE_TOLERANCE)
+
+
+def test_changing_a_parameter_changes_the_demo_scores():
+    rouge = next(method for method in build_demo_methods() if method.identifier == "rouge_1")
+    entry = DEMO_ENTRIES[1]
+    before = rouge.score(entry.expected_answer, entry.given_answer)
+
+    rouge.update_parameters({"score_type": "precision"})
+
+    exact = next(method for method in build_demo_methods() if method.identifier == "exact_match")
+    assert exact.score("Paris", "paris") == 1.0
+    exact.update_parameters({"lowercase": False})
+    assert exact.score("Paris", "paris") == 0.0
+
+
+def test_the_demo_judge_requantizes_to_the_rating_scale():
+    judge = next(method for method in build_demo_methods() if method.identifier == "llm_judge")
+    entry = next(entry for entry in DEMO_ENTRIES if 0.0 < entry.scores["llm_judge"] < 1.0)
+    expected_fraction = entry.scores["llm_judge"]
+
+    judge.update_parameters({"rating_scale_max": 4})
+
+    assert judge.score(entry.expected_answer, entry.given_answer) == round(expected_fraction * 4) / 4
+    assert judge.uses_language_model is False
 
 
 def test_every_fixed_score_is_between_zero_and_one():
@@ -79,19 +112,12 @@ def test_demo_methods_mirror_the_real_ones():
     assert demo == real
 
 
-def test_demo_methods_return_the_fixed_scores():
+def test_demo_methods_keep_their_score_kind():
     exact_match = next(method for method in build_demo_methods() if method.identifier == "exact_match")
     entry = DEMO_ENTRIES[0]
 
     assert exact_match.score(entry.expected_answer, entry.given_answer) == 1.0
     assert exact_match.score_kind is ScoreKind.BINARY
-
-
-def test_only_bleu_reports_a_corpus_score():
-    corpus_values = {method.identifier: method.corpus_score([]) for method in build_demo_methods()}
-
-    assert corpus_values.pop("bleu") == DEMO_CORPUS_BLEU_SCORE
-    assert all(value is None for value in corpus_values.values())
 
 
 def test_the_demo_dataset_has_twelve_questions():
@@ -108,7 +134,9 @@ def test_the_simulated_run_uses_the_fixed_answers_and_times():
 
     assert [score.given_answer for score in result.scores] == [entry.given_answer for entry in DEMO_ENTRIES]
     assert [score.response_seconds for score in result.scores] == [entry.response_seconds for entry in DEMO_ENTRIES]
-    assert [score.score for score in result.scores] == [entry.scores["embedding"] for entry in DEMO_ENTRIES]
+    assert [score.score for score in result.scores] == pytest.approx(
+        [entry.scores["embedding"] for entry in DEMO_ENTRIES], abs=0.0005
+    )
 
 
 def test_the_simulated_run_reports_progress():

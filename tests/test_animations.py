@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PySide6.QtCore import QAbstractAnimation
 from PySide6.QtWidgets import QApplication, QFrame
 
 from presentation.views.animations import (
@@ -57,3 +58,5 @@ def test_fade_in_applies_a_temporary_effect(application, monkeypatch):
     fade_in(frame)
 
     assert frame.graphicsEffect() is not None
+    for animation in frame.findChildren(QAbstractAnimation):
+        animation.stop()

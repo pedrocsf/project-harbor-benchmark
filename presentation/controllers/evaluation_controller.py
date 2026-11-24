@@ -10,6 +10,7 @@ from domain.entities.evaluation_result import EvaluationResult
 from domain.entities.language_model_settings import LanguageModelSettings
 from domain.entities.question import Question
 from domain.errors import DomainError, EvaluationCancelledError
+from domain.scoring.metric_parameters import InvalidParameterError, ParameterValues
 from domain.scoring.scoring_method import ScoringMethod
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.export_result import ExportResult
@@ -77,6 +78,8 @@ class EvaluationController(QObject):
     export_failed = Signal(str)
     overview_ready = Signal(object)
     overview_failed = Signal(str)
+    parameters_changed = Signal(str)
+    parameters_failed = Signal(str)
 
     def __init__(self, use_cases: EvaluationUseCases, scoring_methods: Sequence[ScoringMethod]):
         super().__init__()
@@ -87,6 +90,7 @@ class EvaluationController(QObject):
         self._worker: BackgroundWorker | None = None
         self._last_result: EvaluationResult | None = None
         self._is_rescoring = False
+        self._parameter_snapshot: tuple[ScoringMethod, dict] | None = None
 
     @property
     def scoring_methods(self) -> list[ScoringMethod]:
@@ -110,8 +114,17 @@ class EvaluationController(QObject):
         self._last_result = None
         self.dataset_loaded.emit(str(source), len(questions))
 
+    def method_by_identifier(self, identifier: str) -> ScoringMethod | None:
+        return next((candidate for candidate in self._scoring_methods if candidate.identifier == identifier), None)
+
+    def update_method_parameters(self, identifier: str, values: ParameterValues) -> None:
+        self._change_parameters(identifier, lambda method: method.update_parameters(values))
+
+    def reset_method_parameters(self, identifier: str) -> None:
+        self._change_parameters(identifier, lambda method: method.reset_parameters())
+
     def select_method(self, identifier: str) -> None:
-        method = next((candidate for candidate in self._scoring_methods if candidate.identifier == identifier), None)
+        method = self.method_by_identifier(identifier)
         if method is None or method is self._selected_method or self._worker is not None:
             return
         self._selected_method = method
@@ -178,6 +191,29 @@ class EvaluationController(QObject):
             return
         self.exported.emit(str(destination))
 
+    def _change_parameters(self, identifier: str, apply_change: Callable[[ScoringMethod], None]) -> None:
+        method = self.method_by_identifier(identifier)
+        if method is None or self._worker is not None:
+            return
+        snapshot = method.parameters
+        try:
+            apply_change(method)
+        except InvalidParameterError as error:
+            self.parameters_failed.emit(str(error))
+            return
+        self.parameters_changed.emit(identifier)
+        if self._last_result is not None and method is self._selected_method:
+            self._parameter_snapshot = (method, snapshot)
+            self._launch_rescoring(self._last_result, method)
+
+    def _restore_parameter_snapshot(self) -> None:
+        if self._parameter_snapshot is None:
+            return
+        method, snapshot = self._parameter_snapshot
+        self._parameter_snapshot = None
+        method.update_parameters(snapshot)
+        self.parameters_changed.emit(method.identifier)
+
     def _launch_rescoring(self, result: EvaluationResult, method: ScoringMethod) -> None:
         self._is_rescoring = True
         self._launch_worker(
@@ -209,9 +245,11 @@ class EvaluationController(QObject):
     def _handle_completed(self, result: EvaluationResult) -> None:
         self._last_result = result
         self._is_rescoring = False
+        self._parameter_snapshot = None
         self.completed.emit(result)
 
     def _handle_failed(self, message: str) -> None:
+        self._restore_parameter_snapshot()
         self.failed.emit(message)
         if self._is_rescoring and self._last_result is not None:
             self._is_rescoring = False

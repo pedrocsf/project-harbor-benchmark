@@ -4,7 +4,6 @@ from dataclasses import dataclass
 DEMO_DATASET_NAME = "demo-dataset.json"
 DEMO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions"
 DEMO_BADGE_TEXT = "DEMO · sample data"
-DEMO_CORPUS_BLEU_SCORE = 0.433
 
 
 @dataclass(frozen=True)

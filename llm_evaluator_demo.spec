@@ -5,8 +5,8 @@ APP_NAME = "LlmEvaluatorDemo"
 analysis = Analysis(
     ["main_demo.py"],
     pathex=["."],
-    datas=[("presentation/assets", "presentation/assets")] + collect_data_files("fastembed"),
-    hiddenimports=collect_submodules("sacrebleu"),
+    datas=[("presentation/assets", "presentation/assets"), ("demo/demo_embeddings.json", "demo")] + collect_data_files("fastembed"),
+    hiddenimports=collect_submodules("sacrebleu") + collect_submodules("presentation.views.metric_explorer"),
     excludes=["tkinter", "pytest"],
 )
 archive = PYZ(analysis.pure)

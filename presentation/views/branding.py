@@ -18,3 +18,5 @@ TEXT_ON_PRIMARY_COLOR = "#2b0510"
 SUCCESS_COLOR = "#7dd3a8"
 WARNING_COLOR = "#ff9a40"
 LOGO_RESOURCE_PATH = "presentation/assets/logo.png"
+ERROR_COLOR = "#ff6b6b"
+MONOSPACE_FONT_FAMILIES = ("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "Consolas", "monospace")

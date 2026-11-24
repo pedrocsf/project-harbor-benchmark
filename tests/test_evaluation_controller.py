@@ -1,9 +1,17 @@
+from datetime import datetime
 from pathlib import Path
 
+import pytest
+from PySide6.QtCore import QCoreApplication, QThread
+
+from domain.entities.evaluation_result import EvaluationResult
 from domain.entities.question import Question
+from domain.entities.question_score import QuestionScore
 from domain.errors import QuestionsUnavailableError
 from domain.repositories.question_repository import QuestionRepository
 from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
+from domain.scoring.metric_parameters import InvalidParameterError, ParameterKind, ParameterSpec
+from domain.scoring.scoring_method import ScoreKind, ScoringMethod
 from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.export_result import ExportResult
@@ -127,3 +135,147 @@ def test_refuses_to_run_without_an_endpoint():
     controller.start_evaluation("   ", "", "")
 
     assert failures == [(MISSING_ENDPOINT_MESSAGE,)]
+
+WAIT_ATTEMPTS = 300
+WAIT_MILLISECONDS = 10
+SETTLE_MILLISECONDS = 100
+
+
+class ParameterizedMethod(ScoringMethod):
+    identifier = "parameterized"
+    display_name = "Parameterized"
+    column_header = "Parameterized"
+    score_kind = ScoreKind.CONTINUOUS
+    parameter_specs = (
+        ParameterSpec("weight", "Weight", "Weight.", ParameterKind.DECIMAL, 1.0, minimum=0.0, maximum=2.0),
+    )
+
+    def __init__(self, fail_scoring=False):
+        self.fail_scoring = fail_scoring
+
+    def score(self, expected_answer, given_answer):
+        if self.fail_scoring and self.parameters["weight"] != 1.0:
+            raise InvalidParameterError("scoring broke")
+        return self.parameters["weight"] / 2
+
+
+def build_parameter_controller(method):
+    controller = build_controller(FakeQuestionRepository())
+    controller._scoring_methods.append(method)
+    return controller
+
+
+def build_parameter_result(method):
+    scores = (QuestionScore(Question("1", "Q", "a"), "a", 0.5, 1.0),)
+    return EvaluationResult(scores, datetime(2026, 10, 28), method)
+
+
+def wait_for_worker(controller):
+    for _ in range(WAIT_ATTEMPTS):
+        if controller._worker is None:
+            QThread.msleep(SETTLE_MILLISECONDS)
+            QCoreApplication.processEvents()
+            return
+        QCoreApplication.processEvents()
+        QThread.msleep(WAIT_MILLISECONDS)
+    raise AssertionError("worker did not finish")
+
+
+@pytest.fixture(scope="module")
+def core_application():
+    return QCoreApplication.instance() or QCoreApplication([])
+
+
+def test_applies_valid_parameters(core_application):
+    method = ParameterizedMethod()
+    controller = build_parameter_controller(method)
+    changes = record(controller.parameters_changed)
+
+    controller.update_method_parameters("parameterized", {"weight": 1.5})
+
+    assert method.parameters == {"weight": 1.5}
+    assert changes == [("parameterized",)]
+
+
+def test_invalid_parameters_keep_old_values(core_application):
+    method = ParameterizedMethod()
+    controller = build_parameter_controller(method)
+    failures = record(controller.parameters_failed)
+
+    controller.update_method_parameters("parameterized", {"weight": 5.0})
+
+    assert method.parameters == {"weight": 1.0}
+    assert len(failures) == 1
+
+
+def test_reset_restores_defaults(core_application):
+    method = ParameterizedMethod()
+    controller = build_parameter_controller(method)
+    controller.update_method_parameters("parameterized", {"weight": 1.5})
+
+    controller.reset_method_parameters("parameterized")
+
+    assert method.parameters == {"weight": 1.0}
+
+
+def test_unknown_identifier_is_ignored(core_application):
+    controller = build_parameter_controller(ParameterizedMethod())
+    changes = record(controller.parameters_changed)
+    failures = record(controller.parameters_failed)
+
+    controller.update_method_parameters("missing", {"weight": 1.5})
+
+    assert changes == [] and failures == []
+
+
+def test_rescores_the_last_result_for_the_selected_method(core_application):
+    method = ParameterizedMethod()
+    controller = build_parameter_controller(method)
+    controller.select_method("parameterized")
+    controller._last_result = build_parameter_result(method)
+    results = record(controller.completed)
+
+    controller.update_method_parameters("parameterized", {"weight": 1.5})
+    wait_for_worker(controller)
+
+    assert results[0][0].scores[0].score == pytest.approx(0.75)
+
+
+def test_does_not_rescore_when_method_is_not_selected(core_application):
+    method = ParameterizedMethod()
+    controller = build_parameter_controller(method)
+    controller._last_result = build_parameter_result(controller.selected_method)
+    results = record(controller.completed)
+
+    controller.update_method_parameters("parameterized", {"weight": 1.5})
+
+    assert controller._worker is None and results == []
+
+
+def test_rolls_back_when_rescoring_fails(core_application):
+    method = ParameterizedMethod(fail_scoring=True)
+    controller = build_parameter_controller(method)
+    controller.select_method("parameterized")
+    previous = build_parameter_result(method)
+    controller._last_result = previous
+    failures = record(controller.failed)
+    changes = record(controller.parameters_changed)
+
+    controller.update_method_parameters("parameterized", {"weight": 1.5})
+    wait_for_worker(controller)
+
+    assert method.parameters == {"weight": 1.0}
+    assert len(failures) == 1
+    assert len(changes) == 2
+
+
+def test_ignores_parameter_changes_while_running(core_application):
+    method = ParameterizedMethod()
+    controller = build_parameter_controller(method)
+    controller._worker = object()
+    changes = record(controller.parameters_changed)
+
+    controller.update_method_parameters("parameterized", {"weight": 1.5})
+
+    assert method.parameters == {"weight": 1.0} and changes == []
+    controller._worker = None

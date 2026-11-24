@@ -37,6 +37,7 @@ from presentation.views.branding import (
 )
 from presentation.views.info_dialog import InfoDialog
 from presentation.views.logo_image import LogoImage
+from presentation.views.metric_parameters_dialog import MetricParametersDialog
 from presentation.views.metrics_panel import MetricsPanel
 from presentation.views.overview_chart import render_overview_chart
 from presentation.views.score_bar_delegate import SCORE_FRACTION_ROLE, ScoreBarDelegate
@@ -73,6 +74,11 @@ EMPTY_STATE_TEXT = (
     "Load a JSON list of questions and expected answers. Then point the app at your model, "
     "choose a metric and run the benchmark. Results, metrics and charts appear here."
 )
+PARAMETERS_BUTTON_TEXT = "Parameters…"
+DEFAULT_PARAMETERS_TEXT = "Default parameters"
+CUSTOM_PARAMETER_TEXT = "{count} custom parameter"
+CUSTOM_PARAMETERS_TEXT = "{count} custom parameters"
+PARAMETERS_SPACING = 6
 METRIC_HINT = "Changing the metric re-scores the last run without calling the model again."
 FIXED_TABLE_HEADERS = ("#", "Question", "Expected answer", "LLM answer")
 NUMBER_COLUMN = 0
@@ -95,6 +101,7 @@ DEFAULT_EXPORT_NAME = "result.json"
 CHART_FILTER = "PNG image (*.png)"
 CHART_SUFFIX = ".png"
 DEFAULT_CHART_NAME = "overview.png"
+EXPLORER_BUTTON_TEXT = "How it works"
 
 
 @dataclass(frozen=True)
@@ -102,6 +109,7 @@ class MainWindowOptions:
     dataset_picker: Callable[[], Path | None] | None = None
     initial_endpoint: str = ""
     badge_text: str | None = None
+    metric_explorer_factory: Callable[[], QWidget] | None = None
 
 
 class MainWindow(QMainWindow):
@@ -114,6 +122,9 @@ class MainWindow(QMainWindow):
         self._pending_chart_destination: Path | None = None
         self._score_delegate: ScoreBarDelegate | None = None
         self._info_dialog: InfoDialog | None = None
+        self._metric_explorer: QWidget | None = None
+        self._parameters_dialog: MetricParametersDialog | None = None
+        self._explorer_button: QPushButton | None = None
         self._build_interface()
         self._connect_controller()
         self._show_awaiting_dataset_state()
@@ -159,6 +170,10 @@ class MainWindow(QMainWindow):
             badge = QLabel(self._options.badge_text)
             badge.setObjectName("demoBadge")
             layout.addWidget(badge, alignment=Qt.AlignmentFlag.AlignVCenter)
+        if self._options.metric_explorer_factory is not None:
+            self._explorer_button = QPushButton(EXPLORER_BUTTON_TEXT)
+            self._explorer_button.clicked.connect(self._on_explorer_clicked)
+            layout.addWidget(self._explorer_button)
         layout.addWidget(self._info_button)
         layout.addWidget(self._chart_button)
         layout.addWidget(self._export_button)
@@ -245,8 +260,64 @@ class MainWindow(QMainWindow):
         section.setSpacing(SECTION_SPACING)
         section.addWidget(self._build_section_title("Metric"))
         section.addWidget(self._method_combo)
+        section.addWidget(self._build_parameters_controls())
         section.addWidget(hint)
         return section
+
+    def _build_parameters_controls(self) -> QWidget:
+        self._parameters_button = QPushButton(PARAMETERS_BUTTON_TEXT)
+        self._parameters_button.setObjectName("parametersButton")
+        self._parameters_button.clicked.connect(self._on_parameters_clicked)
+        self._parameters_hint = QLabel()
+        self._parameters_hint.setObjectName("hintLabel")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(PARAMETERS_SPACING)
+        layout.addWidget(self._parameters_button)
+        layout.addWidget(self._parameters_hint)
+        self._parameters_controls = QWidget()
+        self._parameters_controls.setLayout(layout)
+        self._refresh_parameters_controls()
+        return self._parameters_controls
+
+    def _refresh_parameters_controls(self) -> None:
+        method = self._controller.selected_method
+        self._parameters_controls.setVisible(bool(method.parameter_specs))
+        custom_count = sum(
+            1 for spec in method.parameter_specs if method.parameters.get(spec.key) != spec.default
+        )
+        self._parameters_hint.setText(
+            DEFAULT_PARAMETERS_TEXT if custom_count == 0 else self._custom_parameters_text(custom_count)
+        )
+
+    def _on_parameters_clicked(self) -> None:
+        method = self._controller.selected_method
+        dialog = MetricParametersDialog(method.display_name, method.parameter_specs, method.parameters)
+        self._parameters_dialog = dialog
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._center_dialog(dialog)
+        dialog.applied.connect(lambda values: self._controller.update_method_parameters(method.identifier, values))
+        self._controller.parameters_changed.connect(dialog.accept)
+        self._controller.parameters_failed.connect(dialog.show_error)
+        dialog.finished.connect(lambda _: self._disconnect_parameters_dialog(dialog))
+        dialog.show()
+
+    def _disconnect_parameters_dialog(self, dialog: MetricParametersDialog) -> None:
+        self._controller.parameters_changed.disconnect(dialog.accept)
+        self._controller.parameters_failed.disconnect(dialog.show_error)
+        dialog.deleteLater()
+        self._parameters_dialog = None
+
+    def _center_dialog(self, dialog: MetricParametersDialog) -> None:
+        frame = dialog.frameGeometry()
+        frame.moveCenter(self.geometry().center())
+        dialog.move(frame.topLeft())
+
+    def closeEvent(self, event) -> None:
+        for window in (self._info_dialog, self._metric_explorer, self._parameters_dialog):
+            if window is not None:
+                window.close()
+        super().closeEvent(event)
 
     def _build_method_combo(self) -> QComboBox:
         combo = ThemedComboBox()
@@ -375,6 +446,7 @@ class MainWindow(QMainWindow):
         self._controller.export_failed.connect(self._show_export_failure)
         self._controller.overview_ready.connect(self._save_overview_chart)
         self._controller.overview_failed.connect(self._show_overview_failure)
+        self._controller.parameters_changed.connect(self._refresh_parameters_controls)
 
     def _on_load_clicked(self) -> None:
         selected_source = self._pick_dataset()
@@ -401,13 +473,28 @@ class MainWindow(QMainWindow):
         self._controller.select_method(self._method_combo.itemData(index))
         self._set_score_header(self._controller.selected_method.column_header)
         self._metric_title_label.setText(self._controller.selected_method.display_name)
+        self._refresh_parameters_controls()
+
+    def _custom_parameters_text(self, custom_count: int) -> str:
+        template = CUSTOM_PARAMETER_TEXT if custom_count == 1 else CUSTOM_PARAMETERS_TEXT
+        return template.format(count=custom_count)
 
     def _on_info_clicked(self) -> None:
         if self._info_dialog is None:
-            self._info_dialog = InfoDialog(self)
+            self._info_dialog = InfoDialog(self._controller.scoring_methods)
         self._info_dialog.show()
         self._info_dialog.raise_()
         self._info_dialog.activateWindow()
+
+    def _on_explorer_clicked(self) -> None:
+        if self._options.metric_explorer_factory is None:
+            return
+        if self._metric_explorer is None:
+            self._metric_explorer = self._options.metric_explorer_factory()
+        self._metric_explorer.select_metric(self._method_combo.currentData())
+        self._metric_explorer.show()
+        self._metric_explorer.raise_()
+        self._metric_explorer.activateWindow()
 
     def _on_export_clicked(self) -> None:
         selected_path, selected_filter = QFileDialog.getSaveFileName(
@@ -555,6 +642,7 @@ class MainWindow(QMainWindow):
             self._api_key_input,
             self._model_input,
             self._method_combo,
+            self._parameters_button,
             self._run_button,
         )
         for widget in configuration_widgets:

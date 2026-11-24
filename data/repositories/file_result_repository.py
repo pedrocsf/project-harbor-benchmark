@@ -60,6 +60,7 @@ class FileResultRepository(ResultRepository):
             "evaluated_at": result.evaluated_at.isoformat(timespec="seconds"),
             "method": result.method.identifier,
             "method_name": result.method.display_name,
+            "method_parameters": result.method.parameters,
             "average_score": result.average_score,
             "metrics": _metrics_to_dict(result.metrics),
             "scores": [_score_to_row(score, result.method.identifier) for score in result.scores],

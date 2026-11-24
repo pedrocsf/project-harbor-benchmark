@@ -61,3 +61,12 @@ def test_rejects_unsupported_suffix(tmp_path, result):
 def test_reports_unwritable_destination(tmp_path, result):
     with pytest.raises(ResultExportError):
         FileResultRepository().save(result, tmp_path / "missing" / "out.json")
+
+
+def test_json_includes_method_parameters(tmp_path, result):
+    destination = tmp_path / "out.json"
+
+    FileResultRepository().save(result, destination)
+
+    document = json.loads(destination.read_text(encoding="utf-8"))
+    assert document["method_parameters"] == result.method.parameters
