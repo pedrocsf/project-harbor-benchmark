@@ -7,6 +7,13 @@ from presentation.views.metric_explorer.scenes.contains_answer_scene import Cont
 from presentation.views.metric_explorer.scenes.embedding_scene import EmbeddingScene
 from presentation.views.metric_explorer.scenes.exact_match_scene import ExactMatchScene
 from presentation.views.metric_explorer.scenes.llm_judge_scene import LlmJudgeScene
+from presentation.views.metric_explorer.scenes.rag_judge_scenes import (
+    AnswerRelevancyScene,
+    ContextRelevanceScene,
+    ContextSupportScene,
+    FaithfulnessScene,
+)
+from presentation.views.metric_explorer.scenes.retrieval_ranking_scene import RetrievalRankingScene
 from presentation.views.metric_explorer.scenes.rouge_l_scene import RougeLScene
 from presentation.views.metric_explorer.scenes.rouge_n_scene import RougeNScene
 from presentation.views.metric_explorer.scenes.token_f1_scene import TokenF1Scene
@@ -15,6 +22,8 @@ from presentation.views.metric_explorer.scenes.token_recall_scene import TokenRe
 UNKNOWN_SCENE_MESSAGE = "There is no scene for the metric {identifier!r}."
 UNIGRAM_ORDER = 1
 BIGRAM_ORDER = 2
+RETRIEVAL_SCENE_IDENTIFIERS = ("hit_rate", "context_precision", "context_recall", "mrr", "ndcg")
+CONTEXT_SUPPORT_SCENE_IDENTIFIERS = ("k_precision", "context_coverage")
 
 
 class SceneRegistry:
@@ -49,5 +58,10 @@ def build_scene_registry() -> SceneRegistry:
             BleuScene(),
             ChrfScene(),
             LlmJudgeScene(),
+            AnswerRelevancyScene(),
+            *(RetrievalRankingScene(identifier) for identifier in RETRIEVAL_SCENE_IDENTIFIERS),
+            ContextRelevanceScene(),
+            *(ContextSupportScene(identifier) for identifier in CONTEXT_SUPPORT_SCENE_IDENTIFIERS),
+            FaithfulnessScene(),
         )
     )

@@ -3,10 +3,14 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal
 
+from domain.entities.evaluation_sample import EvaluationSample
+from domain.entities.question import Question
+from domain.entities.retrieved_context import RetrievedContext
 from domain.explanations.metric_walkthrough import MetricWalkthrough
 from domain.explanations.timeline import TimelinePosition, position_at, step_start_seconds, total_cycle_seconds
 from domain.scoring.scoring_method import ScoreKind, ScoringMethod
 from domain.usecases.build_metric_walkthrough import BuildMetricWalkthrough, WalkthroughRequest
+from domain.usecases.build_rag_walkthrough import BuildRagWalkthrough
 
 PLAYBACK_SPEEDS = (0.5, 1.0, 2.0)
 DEFAULT_SPEED = 1.0
@@ -36,6 +40,19 @@ class ExplorerExample:
     expected_answer: str
     given_answer: str
     scores: Mapping[str, float]
+    contexts: tuple[RetrievedContext, ...] | None = None
+    relevant_context_ids: tuple[str, ...] = ()
+    relevant_passages: tuple[str, ...] = ()
+
+    def to_sample(self) -> EvaluationSample:
+        question = Question(
+            self.identifier,
+            self.question,
+            self.expected_answer,
+            self.relevant_context_ids,
+            self.relevant_passages,
+        )
+        return EvaluationSample(question, self.given_answer, self.contexts)
 
 
 class MetricExplorerController(QObject):
@@ -52,6 +69,7 @@ class MetricExplorerController(QObject):
         build_walkthrough: BuildMetricWalkthrough,
         step_durations: Callable[[str], Sequence[float]],
         motion_enabled: bool = True,
+        build_rag_walkthrough: BuildRagWalkthrough | None = None,
     ):
         super().__init__()
         if not scoring_methods:
@@ -64,6 +82,7 @@ class MetricExplorerController(QObject):
         )
         self._examples = tuple(examples)
         self._build_walkthrough = build_walkthrough
+        self._build_rag_walkthrough = build_rag_walkthrough
         self._step_durations = step_durations
         self._motion_enabled = motion_enabled
         self._metric_index = 0
@@ -206,6 +225,8 @@ class MetricExplorerController(QObject):
         example = self.selected_example
         identifier = self.selected_metric.identifier
         method = self._scoring_methods[identifier]
+        if self._build_rag_walkthrough is not None and self._build_rag_walkthrough.supports(method):
+            return self._build_rag_walkthrough.execute(method, example.to_sample())
         return self._build_walkthrough.execute(
             WalkthroughRequest(
                 identifier,

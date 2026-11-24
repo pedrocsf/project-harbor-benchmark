@@ -44,12 +44,26 @@ def lexical_methods():
     ]
 
 
-def test_every_entry_scores_every_available_method():
-    from main import build_language_model_gateway, build_scoring_methods
+FIXED_SCORE_EXCEPTIONS = {"answer_relevancy"}
 
-    identifiers = {method.identifier for method in build_scoring_methods(build_language_model_gateway())}
+
+def test_every_entry_has_fixed_scores_for_the_answer_metrics_and_rag_data():
+    from demo.demo_rag_data import DEMO_RAG_ENTRIES
+    from main import build_answer_methods, build_language_model_gateway
+
+    methods = build_answer_methods(build_language_model_gateway(), None)
+    identifiers = {method.identifier for method in methods} - FIXED_SCORE_EXCEPTIONS
 
     assert all(set(entry.scores) == identifiers for entry in DEMO_ENTRIES)
+    assert set(DEMO_RAG_ENTRIES) == {entry.identifier for entry in DEMO_ENTRIES}
+
+
+def test_demo_offers_every_metric_of_the_real_app():
+    from main import build_language_model_gateway, build_scoring_methods
+
+    real = [method.identifier for method in build_scoring_methods(build_language_model_gateway())]
+
+    assert [method.identifier for method in build_demo_methods()] == real
 
 
 @pytest.mark.parametrize("method", lexical_methods(), ids=lambda method: method.identifier)
@@ -62,6 +76,8 @@ def test_fixed_scores_match_the_real_formulas(method):
 
 def test_default_demo_scores_reproduce_the_tables():
     for method in build_demo_methods():
+        if method.identifier not in DEMO_ENTRIES[0].scores:
+            continue
         for entry in DEMO_ENTRIES:
             score = method.score(entry.expected_answer, entry.given_answer)
 
@@ -165,6 +181,6 @@ def test_switching_metrics_and_building_the_overview_work_with_the_demo_methods(
     overview = BuildMetricOverview().execute(result, methods)
 
     assert [score.score for score in rescored.scores] == [entry.scores["exact_match"] for entry in DEMO_ENTRIES]
-    assert [entry.method.identifier for entry in overview.entries] == [method.identifier for method in methods]
+    answer_methods = [method.identifier for method in methods if not method.requirements]
+    assert [entry.method.identifier for entry in overview.entries] == answer_methods
     assert rescored.metrics.correct_count == 3
-    assert len(overview.entries) == len(methods)

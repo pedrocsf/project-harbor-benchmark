@@ -29,7 +29,7 @@ from presentation.views.theme import EXPLORER_WINDOW_STYLE
 from presentation.views.themed_combo_box import ThemedComboBox
 
 WINDOW_TITLE = "How it works"
-WINDOW_SUBTITLE = "See how each metric turns two answers into a score"
+WINDOW_SUBTITLE = "See how each metric turns an answer into a score"
 WINDOW_WIDTH = 1180
 WINDOW_HEIGHT = 760
 WINDOW_MINIMUM_WIDTH = 980

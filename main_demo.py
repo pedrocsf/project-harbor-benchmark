@@ -13,7 +13,16 @@ from demo.demo_data import (
     DEMO_ENTRIES,
 )
 from demo.demo_question_repository import DemoQuestionRepository
+from demo.demo_rag_data import DEMO_RAG_ENDPOINT, DEMO_RAG_ENTRIES, DEMO_RUN_NAME
+from demo.demo_rag_judges import (
+    DemoAnswerRelevancyScoringMethod,
+    DemoContextRelevanceScoringMethod,
+    DemoFaithfulnessScoringMethod,
+    entries_by_answer,
+    relevance_by_context,
+)
 from demo.demo_run_evaluation import DemoRunEvaluation
+from demo.demo_run_import_repository import DemoRunImportRepository
 from demo.demo_llm_judge import DemoLlmJudgeScoringMethod
 from demo.demo_text_encoder import DemoTextEncoder, load_demo_vectors
 from data.scoring.bleu_scoring_method import BleuScoringMethod
@@ -21,6 +30,17 @@ from data.scoring.chrf_scoring_method import ChrfScoringMethod
 from domain.scoring.contains_answer_scoring_method import ContainsAnswerScoringMethod
 from domain.scoring.embedding_scoring_method import EmbeddingScoringMethod
 from domain.scoring.exact_match_scoring_method import ExactMatchScoringMethod
+from domain.scoring.rag.context_overlap_scoring_methods import (
+    ContextCoverageScoringMethod,
+    KPrecisionScoringMethod,
+)
+from domain.scoring.rag.retrieval_scoring_methods import (
+    ContextPrecisionScoringMethod,
+    ContextRecallScoringMethod,
+    HitRateScoringMethod,
+    MrrScoringMethod,
+    NdcgScoringMethod,
+)
 from domain.scoring.rouge_scoring_methods import RougeLScoringMethod, RougeNScoringMethod
 from domain.scoring.scoring_method import ScoringMethod
 from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
@@ -28,9 +48,12 @@ from domain.scoring.token_recall_scoring_method import TokenRecallScoringMethod
 from domain.usecases.build_metric_overview import BuildMetricOverview
 from domain.usecases.build_metric_walkthrough import BuildMetricWalkthrough
 from domain.usecases.export_result import ExportResult
+from domain.usecases.build_rag_walkthrough import BuildRagWalkthrough
+from domain.usecases.load_imported_run import LoadImportedRun
 from domain.usecases.load_questions import LoadQuestions
 from domain.usecases.prepare_scoring_methods import PrepareScoringMethods
 from domain.usecases.rescore_result import RescoreResult
+from domain.usecases.score_imported_run import ScoreImportedRun
 from presentation.controllers.evaluation_controller import EvaluationController, EvaluationUseCases
 from presentation.controllers.metric_explorer_controller import ExplorerExample, MetricExplorerController
 from presentation.controllers.startup_controller import StartupController
@@ -41,6 +64,7 @@ from presentation.views.metric_explorer.scenes.scene_registry import SceneRegist
 from presentation.views.splash_screen import SplashScreen
 
 DEMO_DATASET_PATH = Path(DEMO_DATASET_NAME)
+DEMO_RUN_PATH = Path(DEMO_RUN_NAME)
 SPLASH_STATUS = "Loading demo data…"
 DEMO_EMBEDDINGS_PATH = "demo/demo_embeddings.json"
 JUDGE_IDENTIFIER = "llm_judge"
@@ -52,11 +76,17 @@ def build_demo_text_encoder() -> DemoTextEncoder:
 
 
 def build_demo_methods(text_encoder: DemoTextEncoder | None = None) -> list[ScoringMethod]:
+    encoder = text_encoder or build_demo_text_encoder()
+    return [*build_demo_answer_methods(encoder), *build_demo_rag_methods()]
+
+
+def build_demo_answer_methods(text_encoder: DemoTextEncoder) -> list[ScoringMethod]:
     judge_fractions = {
         (entry.expected_answer, entry.given_answer): entry.scores[JUDGE_IDENTIFIER] for entry in DEMO_ENTRIES
     }
+    rag_entries_by_answer = entries_by_answer(DEMO_RAG_ENTRIES, demo_answers())
     return [
-        EmbeddingScoringMethod(text_encoder or build_demo_text_encoder()),
+        EmbeddingScoringMethod(text_encoder),
         ExactMatchScoringMethod(),
         TokenF1ScoringMethod(),
         TokenRecallScoringMethod(),
@@ -67,7 +97,27 @@ def build_demo_methods(text_encoder: DemoTextEncoder | None = None) -> list[Scor
         BleuScoringMethod(),
         ChrfScoringMethod(),
         DemoLlmJudgeScoringMethod(judge_fractions),
+        DemoAnswerRelevancyScoringMethod(rag_entries_by_answer, text_encoder),
     ]
+
+
+def build_demo_rag_methods() -> list[ScoringMethod]:
+    questions = {entry.identifier: entry.question for entry in DEMO_ENTRIES}
+    return [
+        HitRateScoringMethod(),
+        ContextPrecisionScoringMethod(),
+        ContextRecallScoringMethod(),
+        MrrScoringMethod(),
+        NdcgScoringMethod(),
+        DemoContextRelevanceScoringMethod(relevance_by_context(DEMO_RAG_ENTRIES, questions)),
+        KPrecisionScoringMethod(),
+        ContextCoverageScoringMethod(),
+        DemoFaithfulnessScoringMethod(entries_by_answer(DEMO_RAG_ENTRIES, demo_answers())),
+    ]
+
+
+def demo_answers() -> dict[str, str]:
+    return {entry.identifier: entry.given_answer for entry in DEMO_ENTRIES}
 
 
 def build_controllers(
@@ -75,11 +125,13 @@ def build_controllers(
 ) -> tuple[StartupController, EvaluationController]:
     demo_methods = build_demo_methods(text_encoder)
     use_cases = EvaluationUseCases(
-        load_questions=LoadQuestions(DemoQuestionRepository(DEMO_ENTRIES)),
-        run_evaluation=DemoRunEvaluation(DEMO_ENTRIES),
+        load_questions=LoadQuestions(DemoQuestionRepository(DEMO_ENTRIES, DEMO_RAG_ENTRIES)),
+        run_evaluation=DemoRunEvaluation(DEMO_ENTRIES, rag_entries=DEMO_RAG_ENTRIES),
         rescore_result=RescoreResult(),
         build_overview=BuildMetricOverview(),
-        export_result=ExportResult(FileResultRepository()),
+        export_result=ExportResult(FileResultRepository(), demo_methods),
+        load_imported_run=LoadImportedRun(DemoRunImportRepository(DEMO_ENTRIES, DEMO_RAG_ENTRIES)),
+        score_imported_run=ScoreImportedRun(),
     )
     startup_controller = StartupController(PrepareScoringMethods(demo_methods))
     return startup_controller, EvaluationController(use_cases, demo_methods)
@@ -87,7 +139,16 @@ def build_controllers(
 
 def build_explorer_examples() -> list[ExplorerExample]:
     return [
-        ExplorerExample(entry.identifier, entry.question, entry.expected_answer, entry.given_answer, entry.scores)
+        ExplorerExample(
+            entry.identifier,
+            entry.question,
+            entry.expected_answer,
+            entry.given_answer,
+            entry.scores,
+            contexts=DEMO_RAG_ENTRIES[entry.identifier].contexts,
+            relevant_context_ids=DEMO_RAG_ENTRIES[entry.identifier].relevant_context_ids,
+            relevant_passages=DEMO_RAG_ENTRIES[entry.identifier].relevant_passages,
+        )
         for entry in DEMO_ENTRIES
     ]
 
@@ -101,6 +162,7 @@ def build_metric_explorer_controller(
         BuildMetricWalkthrough(SacrebleuStatisticsProvider(), text_encoder=text_encoder),
         scene_registry.step_durations,
         motion_enabled(),
+        build_rag_walkthrough=BuildRagWalkthrough(),
     )
     evaluation_controller.parameters_changed.connect(controller.refresh_parameters)
     return controller
@@ -123,7 +185,9 @@ def main() -> int:
     splash = SplashScreen(SPLASH_STATUS)
     options = MainWindowOptions(
         dataset_picker=lambda: DEMO_DATASET_PATH,
+        run_picker=lambda: DEMO_RUN_PATH,
         initial_endpoint=DEMO_ENDPOINT,
+        initial_rag_endpoint=DEMO_RAG_ENDPOINT,
         badge_text=DEMO_BADGE_TEXT,
         metric_explorer_factory=lambda: build_metric_explorer(evaluation_controller, text_encoder),
     )

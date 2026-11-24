@@ -56,7 +56,7 @@ def test_registry_has_a_scene_for_every_metric():
     assert set(registry.identifiers) == {method.identifier for method in build_demo_methods()}
 
 
-def test_window_lists_the_eleven_metrics(application, motion):
+def test_window_lists_every_demo_metric(application, motion):
     window = open_explorer()
 
     texts = labels_text(window)
@@ -64,7 +64,7 @@ def test_window_lists_the_eleven_metrics(application, motion):
     assert isinstance(window, MetricExplorerWindow)
     for method in build_demo_methods():
         assert method.display_name in texts
-    assert len([label for label in window.findChildren(QLabel) if label.objectName() == "explorerMetricName"]) == 11
+    assert len([label for label in window.findChildren(QLabel) if label.objectName() == "explorerMetricName"]) == len(build_demo_methods())
 
 
 def test_switching_metric_updates_title_and_steps(application, motion):
@@ -118,7 +118,14 @@ def test_the_canvas_paints_into_an_image(application, motion):
     painter.end()
 
 
-@pytest.mark.parametrize("identifier", build_scene_registry().identifiers)
+ANSWER_SCENE_IDENTIFIERS = tuple(
+    identifier
+    for identifier in build_scene_registry().identifiers
+    if identifier in BuildMetricWalkthrough(SacrebleuStatisticsProvider()).supported_identifiers
+)
+
+
+@pytest.mark.parametrize("identifier", ANSWER_SCENE_IDENTIFIERS)
 def test_every_scene_paints_every_step_for_every_example(application, identifier):
     scene = build_scene_registry().scene_for(identifier)
     use_case = BuildMetricWalkthrough(SacrebleuStatisticsProvider())
