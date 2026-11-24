@@ -62,6 +62,33 @@ def find_rating(reply: str, maximum_rating: int) -> re.Match | None:
     return None
 
 
+SET_TEMPERATURE_SPEC = ParameterSpec(
+    key="set_temperature",
+    label="Set temperature",
+    description="When off, the provider's default temperature is used. Some models reject custom temperatures.",
+    kind=ParameterKind.BOOLEAN,
+    default=False,
+)
+
+TEMPERATURE_SPEC = ParameterSpec(
+    key="temperature",
+    label="Temperature",
+    description="Sampling temperature sent to the model; applies only when \"Set temperature\" is on. Higher values make the ratings more varied.",
+    kind=ParameterKind.DECIMAL,
+    default=MINIMUM_TEMPERATURE,
+    minimum=MINIMUM_TEMPERATURE,
+    maximum=MAXIMUM_TEMPERATURE,
+    step=TEMPERATURE_STEP,
+    decimals=1,
+)
+
+
+def chosen_temperature(parameters) -> float | None:
+    if not parameters["set_temperature"]:
+        return None
+    return float(parameters["temperature"])
+
+
 class LlmJudgeScoringMethod(ScoringMethod):
     identifier = "llm_judge"
     display_name = "LLM judge"
@@ -94,32 +121,19 @@ class LlmJudgeScoringMethod(ScoringMethod):
             minimum=MINIMUM_SAMPLES,
             maximum=MAXIMUM_SAMPLES,
         ),
-        ParameterSpec(
-            key="set_temperature",
-            label="Set temperature",
-            description="When off, the provider's default temperature is used. Some models reject custom temperatures.",
-            kind=ParameterKind.BOOLEAN,
-            default=False,
-        ),
-        ParameterSpec(
-            key="temperature",
-            label="Temperature",
-            description="Sampling temperature sent to the model; applies only when \"Set temperature\" is on. Higher values make the ratings more varied.",
-            kind=ParameterKind.DECIMAL,
-            default=MINIMUM_TEMPERATURE,
-            minimum=MINIMUM_TEMPERATURE,
-            maximum=MAXIMUM_TEMPERATURE,
-            step=TEMPERATURE_STEP,
-            decimals=1,
-        ),
+        SET_TEMPERATURE_SPEC,
+        TEMPERATURE_SPEC,
     )
 
     def __init__(self, language_model_gateway: LanguageModelGateway):
         self._language_model_gateway = language_model_gateway
         self._settings: LanguageModelSettings | None = None
 
-    def configure(self, settings: LanguageModelSettings) -> None:
+    def configure(self, settings: LanguageModelSettings | None) -> None:
         self._settings = settings
+
+    def judge_calls_per_question(self) -> int | None:
+        return int(self.parameter("samples"))
 
     def score(self, expected_answer: str, given_answer: str) -> float:
         if not given_answer.strip():
@@ -138,8 +152,7 @@ class LlmJudgeScoringMethod(ScoringMethod):
         return sum(ratings) / sample_count / maximum_rating
 
     def _request_rating(self, prompt: str, expected_answer: str, given_answer: str) -> int:
-        temperature = float(self.parameter("temperature")) if self.parameter("set_temperature") else None
-        reply = self._language_model_gateway.ask(self._settings, prompt, temperature)
+        reply = self._language_model_gateway.ask(self._settings, prompt, chosen_temperature(self.parameters))
         return self._parse_rating(reply)
 
     def _parse_rating(self, reply: str) -> int:
