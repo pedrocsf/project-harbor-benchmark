@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -26,17 +27,26 @@ from PySide6.QtWidgets import (
 
 from domain.entities.evaluation_result import EvaluationResult
 from domain.entities.metric_overview import MetricOverview
-from domain.scoring.scoring_method import ScoreKind
+from domain.scoring.scoring_method import ScoreKind, ScoringMethod
+from presentation.controllers.answer_source import AnswerSource
 from presentation.controllers.evaluation_controller import EvaluationController
 from presentation.views.animations import build_value_animation, fade_in, fade_in_window
+from presentation.views.answer_source_panel import AnswerSourcePanel
 from presentation.views.branding import (
     ACTIVE_ROW_COLOR,
     APPLICATION_NAME,
     APPLICATION_SUBTITLE,
     DISABLED_TEXT_COLOR,
 )
+from presentation.views.context_tooltip import context_count_text, contexts_tooltip
 from presentation.views.info_dialog import InfoDialog
 from presentation.views.logo_image import LogoImage
+from presentation.views.metric_combo_model import (
+    apply_metric_availability,
+    first_enabled_index,
+    is_index_enabled,
+    populate_metric_combo,
+)
 from presentation.views.metric_parameters_dialog import MetricParametersDialog
 from presentation.views.metrics_panel import MetricsPanel
 from presentation.views.overview_chart import render_overview_chart
@@ -67,6 +77,7 @@ CONTENT_PAGE = 1
 ENDPOINT_PLACEHOLDER = "http://127.0.0.1:1234/v1/chat/completions"
 OPTIONAL_API_KEY_PLACEHOLDER = "Optional"
 OPTIONAL_MODEL_PLACEHOLDER = "Optional"
+OPTIONAL_JUDGE_URL_PLACEHOLDER = "Optional"
 NO_DATASET_TEXT = "No dataset loaded"
 NO_DATASET_HINT = "Pick a JSON file to begin"
 EMPTY_STATE_TITLE = "Start with a dataset"
@@ -80,14 +91,24 @@ CUSTOM_PARAMETER_TEXT = "{count} custom parameter"
 CUSTOM_PARAMETERS_TEXT = "{count} custom parameters"
 PARAMETERS_SPACING = 6
 METRIC_HINT = "Changing the metric re-scores the last run without calling the model again."
-FIXED_TABLE_HEADERS = ("#", "Question", "Expected answer", "LLM answer")
+JUDGE_CALLS_HINT = "Calls the judge model about {count} times per question ({total} for this dataset)."
+JUDGE_CALL_HINT = "Calls the judge model about once per question ({total} for this dataset)."
+JUDGE_CALLS_PER_CONTEXT_HINT = "Calls the judge model once per retrieved context."
+JUDGE_MODEL_HINT = "Optional. Used only by metrics that call a judge model."
+MODEL_SECTION_TITLE = "Model endpoint"
+JUDGE_SECTION_TITLE = "Judge model"
+FIXED_TABLE_HEADERS = ("#", "Question", "Expected answer", "LLM answer", "Contexts")
 NUMBER_COLUMN = 0
 NUMBER_COLUMN_WIDTH = 56
 SCORE_COLUMN = len(FIXED_TABLE_HEADERS)
 SCORE_COLUMN_WIDTH = 190
 ANSWER_COLUMN = 3
+CONTEXTS_COLUMN = 4
+CONTEXTS_COLUMN_WIDTH = 96
 ANSWERED_TEXT = "Answered"
 WAITING_TEXT = "Waiting for the model…"
+WAITING_RAG_TEXT = "Waiting for the RAG endpoint…"
+SCORING_ROW_TEXT = "Scoring…"
 PENDING_TEXT = "Pending"
 IN_PROGRESS_SCORE_TEXT = "…"
 PENDING_SCORE_TEXT = "-"
@@ -96,6 +117,7 @@ PROGRESS_INDICATOR_SPACING = 8
 CONTINUOUS_SCORE_FORMAT = "{:.3f}"
 BINARY_SCORE_FORMAT = "{:.0f}"
 DATASET_FILTERS = "JSON files (*.json);;All files (*)"
+RUN_FILTERS = "Run files (*.json *.jsonl);;All files (*)"
 EXPORT_FILTERS = {"JSON (*.json)": ".json", "CSV (*.csv)": ".csv"}
 DEFAULT_EXPORT_NAME = "result.json"
 CHART_FILTER = "PNG image (*.png)"
@@ -107,7 +129,9 @@ EXPLORER_BUTTON_TEXT = "How it works"
 @dataclass(frozen=True)
 class MainWindowOptions:
     dataset_picker: Callable[[], Path | None] | None = None
+    run_picker: Callable[[], Path | None] | None = None
     initial_endpoint: str = ""
+    initial_rag_endpoint: str = ""
     badge_text: str | None = None
     metric_explorer_factory: Callable[[], QWidget] | None = None
 
@@ -118,6 +142,7 @@ class MainWindow(QMainWindow):
         self._controller = controller
         self._options = options or MainWindowOptions()
         self._pick_dataset = self._options.dataset_picker or self._pick_dataset_with_dialog
+        self._pick_run = self._options.run_picker or self._pick_run_with_dialog
         self._last_directory = Path.home()
         self._pending_chart_destination: Path | None = None
         self._score_delegate: ScoreBarDelegate | None = None
@@ -184,14 +209,31 @@ class MainWindow(QMainWindow):
         return header
 
     def _build_sidebar(self) -> QFrame:
+        form_layout = QVBoxLayout()
+        form_layout.setContentsMargins(SIDEBAR_MARGIN, SIDEBAR_MARGIN, SIDEBAR_MARGIN, SIDEBAR_SPACING)
+        form_layout.setSpacing(SIDEBAR_SPACING)
+        form_layout.addLayout(self._build_dataset_section())
+        form_layout.addLayout(self._build_metric_section())
+        form_layout.addLayout(self._build_answer_source_section())
+        form_layout.addLayout(self._build_endpoint_section())
+        form_layout.addStretch(1)
+        form = QWidget()
+        form.setObjectName("sidebarForm")
+        form.setLayout(form_layout)
+        scroll = QScrollArea()
+        scroll.setObjectName("sidebarScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(form)
+        run_layout = QVBoxLayout()
+        run_layout.setContentsMargins(SIDEBAR_MARGIN, 0, SIDEBAR_MARGIN, SIDEBAR_MARGIN)
+        run_layout.addWidget(self._build_run_button())
         layout = QVBoxLayout()
-        layout.setContentsMargins(SIDEBAR_MARGIN, SIDEBAR_MARGIN, SIDEBAR_MARGIN, SIDEBAR_MARGIN)
-        layout.setSpacing(SIDEBAR_SPACING)
-        layout.addLayout(self._build_dataset_section())
-        layout.addLayout(self._build_endpoint_section())
-        layout.addLayout(self._build_metric_section())
-        layout.addStretch(1)
-        layout.addWidget(self._build_run_button())
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(scroll, stretch=1)
+        layout.addLayout(run_layout)
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(SIDEBAR_WIDTH)
@@ -234,6 +276,17 @@ class MainWindow(QMainWindow):
         section.addWidget(self._load_button)
         return section
 
+    def _build_answer_source_section(self) -> QVBoxLayout:
+        self._source_panel = AnswerSourcePanel(self._controller.supports_run_import)
+        self._source_panel.set_rag_url(self._options.initial_rag_endpoint)
+        self._source_panel.source_changed.connect(self._on_source_changed)
+        self._source_panel.load_run_requested.connect(self._on_load_run_clicked)
+        section = QVBoxLayout()
+        section.setSpacing(SECTION_SPACING)
+        section.addWidget(self._build_section_title("Answers from"))
+        section.addWidget(self._source_panel)
+        return section
+
     def _build_endpoint_section(self) -> QVBoxLayout:
         self._endpoint_input = QLineEdit(self._options.initial_endpoint)
         self._endpoint_input.setCursorPosition(0)
@@ -243,9 +296,15 @@ class MainWindow(QMainWindow):
         self._api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._model_input = QLineEdit()
         self._model_input.setPlaceholderText(OPTIONAL_MODEL_PLACEHOLDER)
+        self._endpoint_title = self._build_section_title(MODEL_SECTION_TITLE)
+        self._judge_hint = QLabel(JUDGE_MODEL_HINT)
+        self._judge_hint.setObjectName("hintLabel")
+        self._judge_hint.setWordWrap(True)
+        self._judge_hint.hide()
         section = QVBoxLayout()
         section.setSpacing(FORM_SPACING)
-        section.addWidget(self._build_section_title("Model endpoint"))
+        section.addWidget(self._endpoint_title)
+        section.addWidget(self._judge_hint)
         section.addLayout(self._build_field("URL", self._endpoint_input))
         section.addLayout(self._build_field("API key (optional)", self._api_key_input))
         section.addLayout(self._build_field("Model (optional)", self._model_input))
@@ -253,6 +312,9 @@ class MainWindow(QMainWindow):
 
     def _build_metric_section(self) -> QVBoxLayout:
         self._method_combo = self._build_method_combo()
+        self._judge_calls_hint = QLabel()
+        self._judge_calls_hint.setObjectName("hintLabel")
+        self._judge_calls_hint.setWordWrap(True)
         hint = QLabel(METRIC_HINT)
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
@@ -261,8 +323,26 @@ class MainWindow(QMainWindow):
         section.addWidget(self._build_section_title("Metric"))
         section.addWidget(self._method_combo)
         section.addWidget(self._build_parameters_controls())
+        section.addWidget(self._judge_calls_hint)
         section.addWidget(hint)
+        self._refresh_judge_calls_hint()
         return section
+
+    def _refresh_judge_calls_hint(self) -> None:
+        text = self._judge_calls_text(self._controller.selected_method)
+        self._judge_calls_hint.setText(text)
+        self._judge_calls_hint.setVisible(bool(text))
+
+    def _judge_calls_text(self, method: ScoringMethod) -> str:
+        if not method.uses_language_model:
+            return ""
+        calls = method.judge_calls_per_question()
+        if calls is None:
+            return JUDGE_CALLS_PER_CONTEXT_HINT
+        total = calls * len(self._controller.questions)
+        if calls == 1:
+            return JUDGE_CALL_HINT.format(total=total)
+        return JUDGE_CALLS_HINT.format(count=calls, total=total)
 
     def _build_parameters_controls(self) -> QWidget:
         self._parameters_button = QPushButton(PARAMETERS_BUTTON_TEXT)
@@ -321,11 +401,18 @@ class MainWindow(QMainWindow):
 
     def _build_method_combo(self) -> QComboBox:
         combo = ThemedComboBox()
-        for method in self._controller.scoring_methods:
-            combo.addItem(method.display_name, method.identifier)
+        populate_metric_combo(combo, self._controller.scoring_methods)
         combo.setCurrentIndex(combo.findData(self._controller.selected_method.identifier))
         combo.currentIndexChanged.connect(self._on_method_changed)
         return combo
+
+    def _refresh_metric_availability(self) -> None:
+        apply_metric_availability(
+            self._method_combo, self._controller.scoring_methods, self._controller.missing_requirements_for
+        )
+        if not is_index_enabled(self._method_combo, self._method_combo.currentIndex()):
+            self._method_combo.setCurrentIndex(first_enabled_index(self._method_combo))
+        self._refresh_judge_calls_hint()
 
     def _build_run_button(self) -> QWidget:
         self._run_button = QPushButton("Run benchmark")
@@ -417,6 +504,7 @@ class MainWindow(QMainWindow):
 
     def _build_results_table(self) -> QTableWidget:
         self._table = QTableWidget(0, len(FIXED_TABLE_HEADERS) + 1)
+        self._table.setMouseTracking(True)
         self._set_score_header(self._controller.selected_method.column_header)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -429,9 +517,12 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(NUMBER_COLUMN, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(SCORE_COLUMN, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(CONTEXTS_COLUMN, QHeaderView.ResizeMode.Fixed)
         header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._table.setColumnWidth(NUMBER_COLUMN, NUMBER_COLUMN_WIDTH)
         self._table.setColumnWidth(SCORE_COLUMN, SCORE_COLUMN_WIDTH)
+        self._table.setColumnWidth(CONTEXTS_COLUMN, CONTEXTS_COLUMN_WIDTH)
+        self._table.setColumnHidden(CONTEXTS_COLUMN, True)
         return self._table
 
     def _connect_controller(self) -> None:
@@ -447,6 +538,10 @@ class MainWindow(QMainWindow):
         self._controller.overview_ready.connect(self._save_overview_chart)
         self._controller.overview_failed.connect(self._show_overview_failure)
         self._controller.parameters_changed.connect(self._refresh_parameters_controls)
+        self._controller.parameters_changed.connect(self._refresh_judge_calls_hint)
+        self._controller.availability_changed.connect(self._refresh_metric_availability)
+        self._controller.run_import_loaded.connect(self._show_run_import_loaded)
+        self._controller.run_import_failed.connect(self._show_run_import_failure)
 
     def _on_load_clicked(self) -> None:
         selected_source = self._pick_dataset()
@@ -462,18 +557,63 @@ class MainWindow(QMainWindow):
         self._last_directory = Path(selected_path).parent
         return Path(selected_path)
 
+    def _pick_run_with_dialog(self) -> Path | None:
+        selected_path, _ = QFileDialog.getOpenFileName(
+            self, "Load run", str(self._last_directory), RUN_FILTERS
+        )
+        if not selected_path:
+            return None
+        self._last_directory = Path(selected_path).parent
+        return Path(selected_path)
+
+    def _on_load_run_clicked(self) -> None:
+        selected_source = self._pick_run()
+        if selected_source is not None:
+            self._controller.load_imported_run(selected_source)
+
+    def _show_run_import_loaded(self, name: str, answer_count: int, has_contexts: bool) -> None:
+        self._source_panel.show_imported_run(name, answer_count, has_contexts)
+        if self._controller.answer_source is AnswerSource.IMPORTED_RUN:
+            self._discard_results()
+
+    def _show_run_import_failure(self, message: str) -> None:
+        QMessageBox.critical(self, WINDOW_TITLE, message)
+
+    def _on_source_changed(self, source: AnswerSource) -> None:
+        self._controller.set_answer_source(source)
+        is_model_source = source is AnswerSource.MODEL_ENDPOINT
+        self._endpoint_title.setText((MODEL_SECTION_TITLE if is_model_source else JUDGE_SECTION_TITLE).upper())
+        self._judge_hint.setVisible(not is_model_source)
+        self._endpoint_input.setPlaceholderText(ENDPOINT_PLACEHOLDER if is_model_source else OPTIONAL_JUDGE_URL_PLACEHOLDER)
+        self._discard_results()
+
+    def _discard_results(self) -> None:
+        if self._controller.questions:
+            self._clear_results()
+            self._reset_progress()
+            self._status_label.clear()
+            self._set_exports_enabled(False)
+
     def _on_run_clicked(self) -> None:
+        rag_input = None
+        if self._controller.answer_source is AnswerSource.RAG_ENDPOINT:
+            rag_input = self._source_panel.rag_input()
         self._controller.start_evaluation(
             self._endpoint_input.text(),
             self._api_key_input.text(),
             self._model_input.text(),
+            rag_input,
         )
 
     def _on_method_changed(self, index: int) -> None:
-        self._controller.select_method(self._method_combo.itemData(index))
+        identifier = self._method_combo.itemData(index)
+        if identifier is None:
+            return
+        self._controller.select_method(identifier)
         self._set_score_header(self._controller.selected_method.column_header)
         self._metric_title_label.setText(self._controller.selected_method.display_name)
         self._refresh_parameters_controls()
+        self._refresh_judge_calls_hint()
 
     def _custom_parameters_text(self, custom_count: int) -> str:
         template = CUSTOM_PARAMETER_TEXT if custom_count == 1 else CUSTOM_PARAMETERS_TEXT
@@ -574,10 +714,16 @@ class MainWindow(QMainWindow):
         self._clear_results()
         self._reset_progress()
         self._status_label.clear()
-        self._set_dataset_summary(Path(source).name, f"{question_count} questions", is_empty=False)
+        self._set_dataset_summary(Path(source).name, self._dataset_detail(question_count), is_empty=False)
         self._dataset_card.setToolTip(source)
         self._show_page(CONTENT_PAGE)
         self._show_ready_state()
+
+    def _dataset_detail(self, question_count: int) -> str:
+        labelled_count = sum(1 for question in self._controller.questions if question.has_relevance_labels)
+        if labelled_count == 0:
+            return f"{question_count} questions"
+        return f"{question_count} questions · {labelled_count} with relevance labels"
 
     def _show_page(self, page_index: int) -> None:
         if self._content_stack.currentIndex() == page_index:
@@ -614,6 +760,7 @@ class MainWindow(QMainWindow):
         self._show_ready_state()
         self._set_exports_enabled(True)
         self._select_method_silently(result.method.identifier)
+        self._refresh_metric_availability()
         self._set_score_header(result.method.column_header)
         self._metric_title_label.setText(result.method.display_name)
         self._fill_table(result)
@@ -637,6 +784,7 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, WINDOW_TITLE, message)
 
     def _set_configuration_enabled(self, is_enabled: bool) -> None:
+        self._source_panel.set_inputs_enabled(is_enabled)
         configuration_widgets = (
             self._endpoint_input,
             self._api_key_input,
@@ -661,6 +809,7 @@ class MainWindow(QMainWindow):
             self._table.setItem(row, 1, QTableWidgetItem(question.text))
             self._table.setItem(row, 2, QTableWidgetItem(question.expected_answer))
             self._table.setItem(row, ANSWER_COLUMN, QTableWidgetItem())
+            self._table.setItem(row, CONTEXTS_COLUMN, QTableWidgetItem())
             self._table.setItem(row, SCORE_COLUMN, QTableWidgetItem())
             self._table.item(row, SCORE_COLUMN).setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self._table.resizeRowsToContents()
@@ -672,12 +821,20 @@ class MainWindow(QMainWindow):
             if row < completed:
                 answer_text, score_text = ANSWERED_TEXT, ""
             elif row == completed:
-                answer_text, score_text = WAITING_TEXT, IN_PROGRESS_SCORE_TEXT
+                answer_text, score_text = self._waiting_text(), IN_PROGRESS_SCORE_TEXT
             else:
                 answer_text, score_text = PENDING_TEXT, PENDING_SCORE_TEXT
             self._table.item(row, ANSWER_COLUMN).setText(answer_text)
             self._table.item(row, SCORE_COLUMN).setText(score_text)
             self._style_progress_row(row, row == completed, row > completed)
+
+    def _waiting_text(self) -> str:
+        source = self._controller.answer_source
+        if source is AnswerSource.IMPORTED_RUN:
+            return SCORING_ROW_TEXT
+        if source is AnswerSource.RAG_ENDPOINT:
+            return WAITING_RAG_TEXT
+        return WAITING_TEXT
 
     def _style_progress_row(self, row: int, is_active: bool, is_pending: bool) -> None:
         background = QColor(ACTIVE_ROW_COLOR) if is_active else QColor(0, 0, 0, 0)
@@ -725,11 +882,15 @@ class MainWindow(QMainWindow):
             BINARY_SCORE_FORMAT if result.method.score_kind is ScoreKind.BINARY else CONTINUOUS_SCORE_FORMAT
         )
         self._table.setRowCount(len(result.scores))
+        self._table.setColumnHidden(CONTEXTS_COLUMN, all(score.contexts is None for score in result.scores))
         for row, score in enumerate(result.scores):
             self._table.setItem(row, NUMBER_COLUMN, QTableWidgetItem(str(score.question.identifier)))
             self._table.setItem(row, 1, QTableWidgetItem(score.question.text))
             self._table.setItem(row, 2, QTableWidgetItem(score.question.expected_answer))
             self._table.setItem(row, 3, QTableWidgetItem(score.given_answer))
+            contexts_item = QTableWidgetItem(context_count_text(score.contexts))
+            contexts_item.setToolTip(contexts_tooltip(score.contexts))
+            self._table.setItem(row, CONTEXTS_COLUMN, contexts_item)
             score_item = QTableWidgetItem(score_format.format(score.score))
             score_item.setData(SCORE_FRACTION_ROLE, score.score)
             self._table.setItem(row, SCORE_COLUMN, score_item)

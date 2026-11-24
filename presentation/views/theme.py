@@ -138,6 +138,30 @@ QComboBox QAbstractItemView {
     selection-color: $text_on_primary;
     outline: none;
 }
+QComboBox QAbstractItemView::item:disabled {
+    color: $disabled_text;
+}
+QScrollArea#sidebarScroll, QWidget#sidebarForm {
+    background: transparent;
+    border: none;
+}
+QScrollArea#sidebarScroll QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}
+QScrollArea#sidebarScroll QScrollBar::handle:vertical {
+    background: $strong_border;
+    border-radius: 4px;
+    min-height: 24px;
+}
+QScrollArea#sidebarScroll QScrollBar::add-line, QScrollArea#sidebarScroll QScrollBar::sub-line {
+    width: 0;
+    height: 0;
+}
+QScrollArea#sidebarScroll QScrollBar::add-page, QScrollArea#sidebarScroll QScrollBar::sub-page {
+    background: transparent;
+}
 QPushButton {
     background: transparent;
     border: 1px solid $strong_border;

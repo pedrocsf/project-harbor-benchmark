@@ -22,11 +22,15 @@ PROJECT_DESCRIPTION = (
     "Project Harbor Benchmark lets a team evaluate different LLM approaches on the same dataset, "
     "in the same way. You load a JSON list of questions with their expected answers, point the "
     "app at a model endpoint (OpenAI-compatible, Anthropic or Gemini), and it asks every question, "
-    "compares each answer with the expected one and gives it a score from 0 to 1."
+    "compares each answer with the expected one and gives it a score from 0 to 1. For RAG systems, the "
+    "answers can also come from a RAG endpoint or an imported run file together with the retrieved "
+    "contexts, which unlocks retrieval and grounding metrics."
 )
 PROJECT_NOTES = (
     "Scoring runs locally (the embedding model is bundled with the app) for every metric except "
-    "the LLM judge, which calls your model endpoint. Cloud providers need a connection. Changing the metric after a run re-scores the stored answers "
+    "the ones that use a judge model (LLM judge, Answer relevancy, Context relevance and Faithfulness), "
+    "which call your model endpoint. Retrieval metrics need relevant_context_ids or relevant_passages on "
+    "every question of the dataset. Cloud providers need a connection. Changing the metric after a run re-scores the stored answers "
     "without calling the model again."
 )
 METRICS_TITLE = "Metrics and reference works"
@@ -266,6 +270,206 @@ METRIC_INFOS = (
                 'Gu et al. (2024). A Survey on LLM-as-a-Judge.',
                 'https://arxiv.org/abs/2411.15594',
                 'Surveys how LLM judges are built and assessed.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='answer_relevancy',
+        name='Answer relevancy',
+        formula='score = mean_i sim(E(question), E(q_i)),  q_1..q_n written by the judge from the answer',
+        explanation=(
+            'The judge model writes n questions that the answer would answer; each is embedded and compared with the original question, and the similarities are averaged. An answer that drifts off topic produces different questions and a lower score. It does not check correctness, needs no contexts and costs one judge call per question. Unlike RAGAs, it does not test for evasive answers. An empty answer scores 0.'
+        ),
+        papers=(
+            PaperReference(
+                'Es, James, Espinosa Anke & Schockaert (2024). RAGAs: Automated Evaluation of Retrieval Augmented Generation. EACL System Demonstrations.',
+                'https://aclanthology.org/2024.eacl-demo.16/',
+                'Defines LLM-based faithfulness, answer relevance and context relevance without reference answers.',
+            ),
+            PaperReference(
+                'Saad-Falcon, Khattab, Potts & Zaharia (2024). ARES: An Automated Evaluation Framework for Retrieval-Augmented Generation Systems. NAACL.',
+                'https://aclanthology.org/2024.naacl-long.20/',
+                'Scores context relevance, answer faithfulness and answer relevance with trained LLM judges.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='hit_rate',
+        name='Hit rate@k',
+        formula='score = 1 if any of the first k contexts is relevant, else 0',
+        explanation=(
+            "Retrieval metric. Each retrieved context is checked against the dataset labels: by id against relevant_context_ids, or by text against relevant_passages (relevant when it contains at least the threshold share of a passage's words). The run average is the fraction of questions where retrieval found something useful in the top k."
+        ),
+        papers=(
+            PaperReference(
+                'Manning, Raghavan & Schütze (2008). Introduction to Information Retrieval, ch. 8: Evaluation in information retrieval. Cambridge University Press.',
+                'https://nlp.stanford.edu/IR-book/',
+                'Textbook definitions of precision and recall at a cutoff k for ranked results.',
+            ),
+            PaperReference(
+                'Yu et al. (2024). Evaluation of Retrieval-Augmented Generation: A Survey.',
+                'https://arxiv.org/abs/2405.07437',
+                'Surveys how the retrieval and generation parts of RAG systems are evaluated.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='context_precision',
+        name='Context precision@k',
+        formula='P@k = |relevant contexts among the first k| / k',
+        explanation=(
+            'Retrieval metric: how much of what the system put in the prompt was relevant. It always divides by k, so returning fewer than k contexts lowers the score, and repeated relevant chunks all count. Matching works as in Hit rate.'
+        ),
+        papers=(
+            PaperReference(
+                'Manning, Raghavan & Schütze (2008). Introduction to Information Retrieval, ch. 8: Evaluation in information retrieval. Cambridge University Press.',
+                'https://nlp.stanford.edu/IR-book/',
+                'Textbook definitions of precision and recall at a cutoff k for ranked results.',
+            ),
+            PaperReference(
+                'Yu et al. (2024). Evaluation of Retrieval-Augmented Generation: A Survey.',
+                'https://arxiv.org/abs/2405.07437',
+                'Surveys how the retrieval and generation parts of RAG systems are evaluated.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='context_recall',
+        name='Context recall@k',
+        formula='R@k = |relevant items found in the first k| / |relevant items|',
+        explanation=(
+            'Retrieval metric: how much of what should have been retrieved was retrieved. Each labelled id or passage counts once, however many chunks match it. Matching works as in Hit rate.'
+        ),
+        papers=(
+            PaperReference(
+                'Manning, Raghavan & Schütze (2008). Introduction to Information Retrieval, ch. 8: Evaluation in information retrieval. Cambridge University Press.',
+                'https://nlp.stanford.edu/IR-book/',
+                'Textbook definitions of precision and recall at a cutoff k for ranked results.',
+            ),
+            PaperReference(
+                'Yu et al. (2024). Evaluation of Retrieval-Augmented Generation: A Survey.',
+                'https://arxiv.org/abs/2405.07437',
+                'Surveys how the retrieval and generation parts of RAG systems are evaluated.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='mrr',
+        name='MRR',
+        formula='RR = 1 / rank of the first relevant context (0 if none in the first k);  MRR = mean RR',
+        explanation=(
+            'Retrieval metric that rewards finding a relevant context early: first place scores 1, second 0.5, third 0.33. The run average is the mean reciprocal rank. The cutoff defaults to 10.'
+        ),
+        papers=(
+            PaperReference(
+                'Voorhees (1999). The TREC-8 Question Answering Track Report. TREC-8, NIST SP 500-246.',
+                'https://www.nist.gov/publications/trec-8-question-answering-track-report',
+                'Scores each question by the reciprocal rank of the first correct answer: mean reciprocal rank.',
+            ),
+            PaperReference(
+                'Manning, Raghavan & Schütze (2008). Introduction to Information Retrieval, ch. 8: Evaluation in information retrieval. Cambridge University Press.',
+                'https://nlp.stanford.edu/IR-book/',
+                'Textbook definitions of precision and recall at a cutoff k for ranked results.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='ndcg',
+        name='nDCG@k',
+        formula='DCG = Σ_i gain_i / log2(i + 1),  nDCG = DCG / ideal DCG',
+        explanation=(
+            'Retrieval metric for the whole ranking: every newly found relevant item adds its gain, discounted by its position. The ideal DCG puts all relevant items first. Only new relevant items gain, so duplicates do not inflate the score. With graded gain, a text match gains the share of the passage it covers.'
+        ),
+        papers=(
+            PaperReference(
+                'Järvelin & Kekäläinen (2002). Cumulated gain-based evaluation of IR techniques. ACM TOIS 20(4).',
+                'https://doi.org/10.1145/582415.582418',
+                'Defines (normalized) discounted cumulated gain over graded relevance.',
+            ),
+            PaperReference(
+                'Manning, Raghavan & Schütze (2008). Introduction to Information Retrieval, ch. 8: Evaluation in information retrieval. Cambridge University Press.',
+                'https://nlp.stanford.edu/IR-book/',
+                'Textbook definitions of precision and recall at a cutoff k for ranked results.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='context_relevance',
+        name='Context relevance',
+        formula='score = mean_j rating(question, context_j) / N,  rating in 0..N',
+        explanation=(
+            "Retrieval metric without labels: the judge model rates each retrieved context for how useful it is to answer the question. With the default N = 1 it is the share of useful contexts. It costs one judge call per context (the first 5 by default) and inherits the judge's biases."
+        ),
+        papers=(
+            PaperReference(
+                'Es, James, Espinosa Anke & Schockaert (2024). RAGAs: Automated Evaluation of Retrieval Augmented Generation. EACL System Demonstrations.',
+                'https://aclanthology.org/2024.eacl-demo.16/',
+                'Defines LLM-based faithfulness, answer relevance and context relevance without reference answers.',
+            ),
+            PaperReference(
+                'Saad-Falcon, Khattab, Potts & Zaharia (2024). ARES: An Automated Evaluation Framework for Retrieval-Augmented Generation Systems. NAACL.',
+                'https://aclanthology.org/2024.naacl-long.20/',
+                'Scores context relevance, answer faithfulness and answer relevance with trained LLM judges.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='k_precision',
+        name='K-Precision',
+        formula='score = |answer tokens found in the contexts| / |answer tokens|',
+        explanation=(
+            'Grounding metric: how much of the answer is backed by words that appear in the retrieved contexts. Low values point to content the model added on its own. It is lexical, so paraphrases count as unsupported and copied but wrong statements count as supported. An empty answer scores 0.'
+        ),
+        papers=(
+            PaperReference(
+                'Adlakha et al. (2024). Evaluating Correctness and Faithfulness of Instruction-Following Models for Question Answering. TACL.',
+                'https://aclanthology.org/2024.tacl-1.38/',
+                'Introduces K-Precision, the share of answer tokens found in the knowledge given to the model.',
+            ),
+            PaperReference(
+                'Yu et al. (2024). Evaluation of Retrieval-Augmented Generation: A Survey.',
+                'https://arxiv.org/abs/2405.07437',
+                'Surveys how the retrieval and generation parts of RAG systems are evaluated.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='context_coverage',
+        name='Context coverage',
+        formula='score = |expected answer tokens found in the contexts| / |expected answer tokens|',
+        explanation=(
+            "Grounding metric on the retrieval side: did the contexts contain the words of the expected answer? Low coverage means the model could not have answered from the contexts alone. It is the token recall of the expected answer against the contexts, so it ignores the model's answer."
+        ),
+        papers=(
+            PaperReference(
+                'Adlakha et al. (2024). Evaluating Correctness and Faithfulness of Instruction-Following Models for Question Answering. TACL.',
+                'https://aclanthology.org/2024.tacl-1.38/',
+                'Introduces K-Precision, the share of answer tokens found in the knowledge given to the model.',
+            ),
+            PaperReference(
+                'Yu et al. (2024). Evaluation of Retrieval-Augmented Generation: A Survey.',
+                'https://arxiv.org/abs/2405.07437',
+                'Surveys how the retrieval and generation parts of RAG systems are evaluated.',
+            ),
+        ),
+    ),
+    MetricInfo(
+        identifier='faithfulness',
+        name='Faithfulness',
+        formula='score = |statements supported by the contexts| / |statements in the answer|',
+        explanation=(
+            'Grounding metric with a judge: one call splits the answer into short statements, a second call checks each statement against the contexts (yes or no). It flags made-up content even when it is correct, because only the contexts count. Answers that are empty or have no statements, and runs without contexts, score 0.'
+        ),
+        papers=(
+            PaperReference(
+                'Es, James, Espinosa Anke & Schockaert (2024). RAGAs: Automated Evaluation of Retrieval Augmented Generation. EACL System Demonstrations.',
+                'https://aclanthology.org/2024.eacl-demo.16/',
+                'Defines LLM-based faithfulness, answer relevance and context relevance without reference answers.',
+            ),
+            PaperReference(
+                'Saad-Falcon, Khattab, Potts & Zaharia (2024). ARES: An Automated Evaluation Framework for Retrieval-Augmented Generation Systems. NAACL.',
+                'https://aclanthology.org/2024.naacl-long.20/',
+                'Scores context relevance, answer faithfulness and answer relevance with trained LLM judges.',
             ),
         ),
     ),
