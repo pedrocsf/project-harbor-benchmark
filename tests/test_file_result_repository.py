@@ -70,3 +70,51 @@ def test_json_includes_method_parameters(tmp_path, result):
 
     document = json.loads(destination.read_text(encoding="utf-8"))
     assert document["method_parameters"] == result.method.parameters
+
+
+def build_rag_result():
+    from datetime import datetime
+
+    from domain.entities.evaluation_result import EvaluationResult
+    from domain.entities.retrieved_context import RetrievedContext
+    from domain.scoring.token_f1_scoring_method import TokenF1ScoringMethod
+
+    contexts = (RetrievedContext("doc-1", "Brasília é a capital.", 0.9), RetrievedContext(None, "outro"))
+    scores = (
+        QuestionScore(Question("1", "Capital?", "Brasília", ("doc-1",)), "Brasília", 1.0, 1.0, contexts),
+        QuestionScore(Question("2", "Autor?", "Machado", ("doc-9",)), "Não sei", 0.0, 2.0, ()),
+    )
+    return EvaluationResult(scores, datetime(2026, 11, 24, 10, 0, 0), TokenF1ScoringMethod())
+
+
+def test_json_includes_contexts_and_companion_scores(tmp_path):
+    destination = tmp_path / "rag.json"
+
+    FileResultRepository().save(build_rag_result(), destination, {"hit_rate": (1.0, 0.0)})
+
+    document = json.loads(destination.read_text(encoding="utf-8"))
+    assert document["scores"][0]["contexts"][0] == {"id": "doc-1", "text": "Brasília é a capital.", "score": 0.9}
+    assert document["scores"][1]["contexts"] == []
+    assert document["scores"][1]["companion_scores"] == {"hit_rate": 0.0}
+    assert document["companion_averages"] == {"hit_rate": 0.5}
+
+
+def test_csv_adds_context_and_companion_columns(tmp_path):
+    destination = tmp_path / "rag.csv"
+
+    FileResultRepository().save(build_rag_result(), destination, {"hit_rate": (1.0, 0.0)})
+
+    with destination.open(encoding="utf-8-sig", newline="") as source:
+        rows = list(csv.DictReader(source))
+    assert [row["context_count"] for row in rows] == ["2", "0"]
+    assert rows[0]["context_ids"] == "doc-1 | ?"
+    assert [row["hit_rate"] for row in rows] == ["1.0", "0.0"]
+
+
+def test_results_without_contexts_keep_the_old_csv_columns(tmp_path, result):
+    destination = tmp_path / "out.csv"
+
+    FileResultRepository().save(result, destination)
+
+    header = destination.read_text(encoding="utf-8-sig").splitlines()[0]
+    assert header == "id,question,expected_answer,given_answer,method,score,response_seconds"
