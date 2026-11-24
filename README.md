@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="packaging/linux/llm-evaluator.png" alt="Project Harbor Benchmark logo" width="128" height="128" />
-
-# Project Harbor Benchmark
+<img src="docs/assets/logo-title.png" alt="Project Harbor Benchmark" width="420" />
 
 ### A desktop benchmark for LLMs, scored against a fixed question set.
 

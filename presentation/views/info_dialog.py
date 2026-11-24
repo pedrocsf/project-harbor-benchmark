@@ -30,6 +30,7 @@ from presentation.views.info_content import (
     PaperReference,
 )
 from presentation.views.logo_image import LogoImage
+from presentation.views.theme import MAIN_WINDOW_STYLE
 
 INFO_WINDOW_TITLE = "Info - " + APPLICATION_NAME
 INFO_WINDOW_WIDTH = 760
@@ -58,6 +59,7 @@ class InfoDialog(QDialog):
             method.identifier: method.parameter_specs for method in scoring_methods
         }
         self.setObjectName("infoDialog")
+        self.setStyleSheet(MAIN_WINDOW_STYLE)
         self.setWindowTitle(INFO_WINDOW_TITLE)
         self.resize(INFO_WINDOW_WIDTH, INFO_WINDOW_HEIGHT)
         layout = QVBoxLayout()

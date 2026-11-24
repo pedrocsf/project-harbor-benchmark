@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from domain.scoring.metric_parameters import ParameterKind, ParameterSpec, ParameterValue, ParameterValues
 from presentation.views.themed_combo_box import ThemedComboBox
+from presentation.views.theme import MAIN_WINDOW_STYLE
 
 DIALOG_WIDTH = 460
 DIALOG_MAX_HEIGHT = 640
@@ -52,6 +53,7 @@ class MetricParametersDialog(QDialog):
     ):
         super().__init__()
         self.setObjectName("parametersDialog")
+        self.setStyleSheet(MAIN_WINDOW_STYLE)
         self.setWindowTitle(TITLE_TEMPLATE.format(name=metric_name))
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setMinimumWidth(DIALOG_WIDTH)

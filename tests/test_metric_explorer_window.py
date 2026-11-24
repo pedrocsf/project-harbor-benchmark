@@ -298,3 +298,9 @@ def test_explorer_is_a_parentless_window(application, motion):
     window = build_metric_explorer(evaluation_controller, text_encoder)
     assert window.parentWidget() is None
     window.close()
+
+
+def test_standalone_explorer_window_carries_theme_background(application, motion):
+    from presentation.views.branding import BACKGROUND_COLOR
+
+    assert BACKGROUND_COLOR in open_explorer().styleSheet()

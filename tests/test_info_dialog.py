@@ -74,3 +74,12 @@ def test_dialog_papers_open_external_links(application, scoring_methods):
 
 def test_dialog_is_a_parentless_window(application, scoring_methods):
     assert InfoDialog(scoring_methods).parentWidget() is None
+
+
+def test_standalone_secondary_windows_carry_theme_background(application, scoring_methods):
+    from presentation.views import branding
+    from presentation.views.metric_parameters_dialog import MetricParametersDialog
+
+    dialogs = [InfoDialog(scoring_methods), MetricParametersDialog("Metric", [], {})]
+    for dialog in dialogs:
+        assert branding.BACKGROUND_COLOR in dialog.styleSheet()
