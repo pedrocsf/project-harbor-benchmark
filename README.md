@@ -16,7 +16,7 @@
 [![Platforms](https://img.shields.io/badge/platform-Linux_%7C_Windows-0f172a?style=flat-square)](#quick-start)
 [![MIT license](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
 
-[Features](#features) · [Quick start](#quick-start) · [Usage](#usage) · [Metrics](#metrics) · [Architecture](#architecture) · [How scoring works](#how-scoring-works) · [Repository layout](#repository-layout) · [Contributing](#contributing) · [License](#license)
+[Features](#features) · [Quick start](#quick-start) · [Usage](#usage) · [Metrics](#metrics) · [License](#license)
 
 </div>
 
@@ -135,11 +135,6 @@ The dataset is a JSON list of questions. See [`examples/questions.example.json`]
 **Parameters…** opens a dialog for the selected metric only, with one control per parameter, a description under each, and **Restore defaults**. Pressing **Apply** re-scores the last run immediately, without calling the model. The defaults reproduce the classic definition of each metric, and the sidebar says when the defaults are in use. Values live in memory for the session and reset when the app closes. The JSON export includes them under `method_parameters`, so a result always says how it was scored.
 
 For the LLM judge, **Set temperature** is off by default, which means the provider's own default is used (some models reject custom temperatures). The **Temperature** value only applies when it is on.
-
-### Animations
-
-The interface uses short animations (window and page fades, staggered metric cards, growing score bars, smooth progress). Set `HARBOR_REDUCE_MOTION=1` before starting the app to turn them all off, including the ones in the explorer.
-
 ### The "How it works" explorer
 
 <div align="center">
@@ -148,7 +143,7 @@ The interface uses short animations (window and page fades, staggered metric car
 
 <br />
 
-In demo mode, **How it works** opens a window with one animated scene per metric. Pick a metric on the left and an example on the top right; the scene plays through numbered steps (for BLEU: precision per n-gram order, geometric mean, brevity penalty, final score) while the matching line of the formula is highlighted and the numbers are filled in. The scene follows the current **Parameters…** values, so changing the BLEU smoothing or the F1 beta changes what you see. Playback can be paused, restarted and stepped, at 0.5×, 1× or 2× speed.
+In demo mode, **How it works** opens a window with one animated scene per metric. Pick a metric on the left and an example on the top right; the scene plays through numbered steps (for BLEU: precision per n-gram order, geometric mean, brevity penalty, final score) while the matching line of the formula is highlighted and the numbers are filled in. The scene follows the current **Parameters…** values, so changing the BLEU smoothing or the F1 beta changes what you see. Playback can be paused, restarted and stepped, at 0.5×, 1× or 2× speed. Set `HARBOR_REDUCE_MOTION=1` before starting the app to turn off all interface animations.
 
 ## Supported providers
 
@@ -188,20 +183,6 @@ Things to keep in mind when reading the scores:
 - Sentence BLEU is unstable on very short answers. Corpus BLEU is more reliable for comparing approaches.
 - Applying a benchmark's formula to your own dataset does not reproduce that benchmark's published score; it only reuses the calculation.
 
-### Info window
-
-**Info** lists every metric with its formula, its parameters (default and range) and the papers it comes from, so a score can be explained to someone who did not run the app.
-
-### Overview chart
-
-<div align="center">
-<img src="docs/assets/overview.png" alt="Metric overview chart exported by Project Harbor Benchmark" width="600" />
-</div>
-
-<br />
-
-**Export chart…** renders a PNG in which every row is a metric: its name, a bar for the mean and a dot for the median. Reading down the chart shows which metrics are generous and which are strict on the same run. The chart is drawn with Qt itself, so it needs no plotting library, and it is only available after a run.
-
 ### References
 
 | Metric | Papers |
@@ -216,76 +197,6 @@ Things to keep in mind when reading the scores:
 | BLEU | Papineni et al. 2002, [BLEU: a Method for Automatic Evaluation of Machine Translation](https://aclanthology.org/P02-1040/), ACL; Chen & Cherry 2014, [A Systematic Comparison of Smoothing Techniques for Sentence-Level BLEU](https://aclanthology.org/W14-3346/), WMT; Post 2018, [A Call for Clarity in Reporting BLEU Scores](https://aclanthology.org/W18-6319/), WMT; Callison-Burch, Osborne & Koehn 2006, [Re-evaluating the Role of Bleu in Machine Translation Research](https://aclanthology.org/E06-1032/), EACL |
 | chrF++ | Popović 2015, [chrF: character n-gram F-score for automatic MT evaluation](https://aclanthology.org/W15-3049/), WMT; Popović 2016, [chrF deconstructed: beta parameters and n-gram weights](https://aclanthology.org/W16-2341/), WMT; Popović 2017, [chrF++: words helping character n-grams](https://aclanthology.org/W17-4770/), WMT |
 | LLM judge | Zheng et al. 2023, [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685), NeurIPS Datasets and Benchmarks; Gu et al. 2024, [A Survey on LLM-as-a-Judge](https://arxiv.org/abs/2411.15594) |
-
-## Architecture
-
-Project Harbor Benchmark follows Clean Architecture with an MVC presentation layer. Dependencies point inward: `presentation → domain ← data`.
-
-```
-┌──────────────────────────────── presentation ─────────────────────────────────┐
-│  views         main window, metrics panel, parameters dialog, info window,    │
-│                overview chart, metric explorer (animated scenes)              │
-│  controllers   evaluation, startup and metric explorer (background threads)   │
-└──────────────────────────────────────┬────────────────────────────────────────┘
-                                       │ calls use cases
-┌──────────────────────────────────────▼────────────────────────────────────────┐
-│                                   domain                                      │
-│  entities       Question, EvaluationResult, MetricOverview                    │
-│  use cases      RunEvaluation, LoadQuestions, RescoreResult, ExportResult,    │
-│                 BuildMetricOverview, BuildMetricWalkthrough, ...              │
-│  interfaces     LanguageModelGateway, QuestionRepository, ResultRepository,   │
-│                 TextEncoder                                                   │
-│  scoring        ScoringMethod + parameter_specs; pure-Python metrics          │
-└──────────────────────────────────────▲────────────────────────────────────────┘
-                                       │ implements interfaces
-┌──────────────────────────────────────┴────────────────────────────────────────┐
-│                                    data                                       │
-│  gateways       OpenAI-compatible, Anthropic, Gemini (routed by URL)          │
-│  repositories   JSON dataset reader, JSON/CSV result exporter                 │
-│  scoring        BLEU and chrF++ (sacrebleu), fastembed text encoder           │
-└───────────────────────────────────────────────────────────────────────────────┘
-
-Scoring pipeline:
-  expected + given answer → normalize → ScoringMethod.score() → 0..1 per question
-  → mean / median / min / max → metrics panel, overview chart, JSON/CSV export
-```
-
-- **Use cases** each expose a single action, for example `RunEvaluation`, `RescoreResult` and `BuildMetricOverview`.
-- **Scoring** goes through the `ScoringMethod` interface (`identifier`, `display_name`, `score_kind`, `parameter_specs`, `parameters`, `score()`, `prepare()` and an optional `corpus_score()`), so adding a metric means adding one class and registering it.
-- **Controllers** are thin: they run use cases on background threads and hand results to the views. `EvaluationController.shutdown()` cancels and joins the worker on exit.
-- **Views** only display data and forward user actions. Colors live in `presentation/views/branding.py` and the Qt stylesheet in `presentation/views/theme.py`.
-
-## How scoring works
-
-1. **Call.** For each question the gateway for the chosen provider sends the prompt and returns the answer, with its response time. Empty answers are counted.
-2. **Normalize.** The token metrics lowercase, optionally strip accents, remove punctuation and remove articles (English by default), according to the metric's parameters. BLEU and chrF++ tokenize through `sacrebleu`.
-3. **Compare.** Each metric computes its per-question score in the 0 to 1 range: a cosine (or other) similarity between embeddings, a token or n-gram overlap, a longest common subsequence, a character n-gram F-score, or a rating divided by its scale. The LLM judge is the only metric that makes extra model calls.
-4. **Aggregate.** The metrics panel shows mean, median, highest and lowest score. BLEU also shows corpus BLEU, which pools all questions.
-5. **Re-score.** Changing the metric or its parameters re-scores the stored answers locally through `RescoreResult`, without calling the model again. The exception is the LLM judge, which needs new calls.
-6. **Export.** The JSON export includes the metric and its `method_parameters`; the overview chart scores the same answers with every metric.
-
-## Repository layout
-
-```
-domain/              entities, repository and gateway interfaces, use cases,
-                     explanations (metric walkthroughs), pure-Python scoring methods
-data/                dataset reader, result exporter, OpenAI-compatible, Anthropic and
-                     Gemini gateways, BLEU and chrF++, fastembed text encoder
-presentation/
-  controllers/       evaluation, startup and metric explorer controllers
-  views/             splash, main window, metrics panel, parameters dialog, info window,
-                     overview chart, metric_explorer/ (animated scenes), theme
-demo/                sample data, precomputed embeddings and demo components for main_demo.py
-examples/            sample dataset
-scripts/             model prefetch and AppImage build
-packaging/linux/     AppRun, .desktop entry and icon
-docs/assets/         screenshots used in this README
-tests/
-```
-
-## Contributing
-
-Issues and pull requests are welcome. Please run `python -m pytest` before opening a pull request, and keep each change focused on a single behavior.
 
 ## License
 
