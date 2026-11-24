@@ -1,5 +1,9 @@
 from domain.scoring.scoring_method import ScoreKind, ScoringMethod
-from domain.scoring.text_normalization import normalize_answer
+from domain.scoring.text_normalization import (
+    NORMALIZATION_PARAMETER_SPECS,
+    normalization_options_from,
+    normalize_answer,
+)
 
 
 class ExactMatchScoringMethod(ScoringMethod):
@@ -7,6 +11,9 @@ class ExactMatchScoringMethod(ScoringMethod):
     display_name = "Exact match"
     column_header = "Exact match"
     score_kind = ScoreKind.BINARY
+    parameter_specs = NORMALIZATION_PARAMETER_SPECS
 
     def score(self, expected_answer: str, given_answer: str) -> float:
-        return 1.0 if normalize_answer(expected_answer) == normalize_answer(given_answer) else 0.0
+        options = normalization_options_from(self.parameters)
+        expected_text = normalize_answer(expected_answer, options)
+        return 1.0 if expected_text == normalize_answer(given_answer, options) else 0.0
