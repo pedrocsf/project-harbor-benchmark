@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
 
+from domain.entities.evaluation_sample import EvaluationSample
 from domain.entities.language_model_settings import LanguageModelSettings
+from domain.errors import DomainError
 from domain.scoring.metric_parameters import (
     ParameterSpec,
     ParameterValue,
@@ -10,6 +12,7 @@ from domain.scoring.metric_parameters import (
     default_parameters,
     validate_parameters,
 )
+from domain.scoring.sample_requirements import MetricGroup, SampleRequirement
 
 PARAMETER_STORAGE_KEY = "_parameter_values"
 
@@ -26,6 +29,8 @@ class ScoringMethod(ABC):
     score_kind: ScoreKind
     uses_language_model: bool = False
     parameter_specs: tuple[ParameterSpec, ...] = ()
+    requirements: frozenset[SampleRequirement] = frozenset()
+    metric_group: MetricGroup = MetricGroup.ANSWER
 
     @property
     def parameters(self) -> dict[str, ParameterValue]:
@@ -48,15 +53,37 @@ class ScoringMethod(ABC):
     def _check_parameters(self, values: ParameterValues) -> None:
         return None
 
-    def configure(self, settings: LanguageModelSettings) -> None:
+    def configure(self, settings: LanguageModelSettings | None) -> None:
         return None
 
     def prepare(self) -> None:
         return None
 
+    def judge_calls_per_question(self) -> int | None:
+        return 0
+
     @abstractmethod
     def score(self, expected_answer: str, given_answer: str) -> float:
         ...
 
+    def score_sample(self, sample: EvaluationSample) -> float:
+        return self.score(sample.expected_answer, sample.given_answer)
+
     def corpus_score(self, answer_pairs: Sequence[tuple[str, str]]) -> float | None:
         return None
+
+
+class SampleOnlyMetricError(DomainError):
+    pass
+
+
+SAMPLE_ONLY_MESSAGE = "{name} needs the question and the retrieved contexts, not only two answers."
+
+
+class SampleScoringMethod(ScoringMethod):
+    def score(self, expected_answer: str, given_answer: str) -> float:
+        raise SampleOnlyMetricError(SAMPLE_ONLY_MESSAGE.format(name=self.display_name))
+
+    @abstractmethod
+    def score_sample(self, sample: EvaluationSample) -> float:
+        ...

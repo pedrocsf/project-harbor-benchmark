@@ -19,6 +19,10 @@ class EvaluationResult:
         return sum(score.score for score in self.scores) / len(self.scores)
 
     @property
+    def has_contexts(self) -> bool:
+        return bool(self.scores) and all(score.contexts is not None for score in self.scores)
+
+    @property
     def metrics(self) -> EvaluationMetrics:
         answer_pairs = [(score.question.expected_answer, score.given_answer) for score in self.scores]
         return EvaluationMetrics.from_scores(self.scores, self.method.corpus_score(answer_pairs))

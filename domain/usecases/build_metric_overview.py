@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 
 from domain.entities.evaluation_result import EvaluationResult
+from domain.entities.evaluation_sample import EvaluationSample
 from domain.entities.metric_overview import MetricOverview, MetricOverviewEntry
+from domain.scoring.sample_requirements import available_requirements
 from domain.scoring.scoring_method import ScoringMethod
 
 
@@ -13,9 +15,15 @@ class BuildMetricOverview:
         return MetricOverview(questions, entries, result.evaluated_at)
 
     def _is_included(self, result: EvaluationResult, method: ScoringMethod) -> bool:
-        return not method.uses_language_model or method.identifier == result.method.identifier
+        if method.identifier == result.method.identifier:
+            return True
+        if method.uses_language_model:
+            return False
+        return method.requirements <= available_requirements(
+            (score.question for score in result.scores), result.has_contexts
+        )
 
     def _scores_for(self, result: EvaluationResult, method: ScoringMethod) -> tuple[float, ...]:
         if method.identifier == result.method.identifier:
             return tuple(score.score for score in result.scores)
-        return tuple(method.score(score.question.expected_answer, score.given_answer) for score in result.scores)
+        return tuple(method.score_sample(EvaluationSample.from_score(score)) for score in result.scores)
