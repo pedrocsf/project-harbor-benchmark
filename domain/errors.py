@@ -24,3 +24,7 @@ class EvaluationCancelledError(DomainError):
 
 class ResultExportError(DomainError):
     pass
+
+
+class RunImportError(DomainError):
+    pass

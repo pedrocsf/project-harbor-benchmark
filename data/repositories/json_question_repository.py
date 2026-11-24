@@ -8,6 +8,8 @@ from domain.repositories.question_repository import QuestionRepository
 QUESTION_KEY = "question"
 EXPECTED_ANSWER_KEY = "expected_answer"
 IDENTIFIER_KEY = "id"
+RELEVANT_CONTEXT_IDS_KEY = "relevant_context_ids"
+RELEVANT_PASSAGES_KEY = "relevant_passages"
 
 
 class JsonQuestionRepository(QuestionRepository):
@@ -38,4 +40,30 @@ class JsonQuestionRepository(QuestionRepository):
             identifier=str(entry.get(IDENTIFIER_KEY, position)),
             text=entry[QUESTION_KEY],
             expected_answer=entry[EXPECTED_ANSWER_KEY],
+            relevant_context_ids=self._read_context_ids(position, entry),
+            relevant_passages=self._read_passages(position, entry),
         )
+
+    def _read_context_ids(self, position: int, entry: dict) -> tuple[str, ...]:
+        values = self._read_list(position, entry, RELEVANT_CONTEXT_IDS_KEY)
+        if any(isinstance(value, (bool, dict, list)) or value is None for value in values):
+            raise QuestionsUnavailableError(
+                f"Question {position}: '{RELEVANT_CONTEXT_IDS_KEY}' must be a list of text or numbers."
+            )
+        return tuple(str(value) for value in values)
+
+    def _read_passages(self, position: int, entry: dict) -> tuple[str, ...]:
+        values = self._read_list(position, entry, RELEVANT_PASSAGES_KEY)
+        if not all(isinstance(value, str) and value.strip() for value in values):
+            raise QuestionsUnavailableError(
+                f"Question {position}: '{RELEVANT_PASSAGES_KEY}' must be a list of non-empty text."
+            )
+        return tuple(values)
+
+    def _read_list(self, position: int, entry: dict, key: str) -> list:
+        values = entry.get(key)
+        if values is None:
+            return []
+        if not isinstance(values, list):
+            raise QuestionsUnavailableError(f"Question {position}: '{key}' must be a list.")
+        return values

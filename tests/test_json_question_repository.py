@@ -60,3 +60,41 @@ def test_rejects_entry_without_expected_answer(tmp_path):
 
     with pytest.raises(QuestionsUnavailableError, match="expected_answer"):
         JsonQuestionRepository().load(path)
+
+
+def test_reads_optional_relevance_labels(tmp_path):
+    path = write_questions(
+        tmp_path,
+        [
+            {
+                "question": "q1?",
+                "expected_answer": "a1",
+                "relevant_context_ids": ["doc-1#2", 40],
+                "relevant_passages": ["Paris é a capital."],
+            },
+            {"question": "q2?", "expected_answer": "a2"},
+        ],
+    )
+
+    labelled, plain = JsonQuestionRepository().load(path)
+
+    assert labelled.relevant_context_ids == ("doc-1#2", "40")
+    assert labelled.relevant_passages == ("Paris é a capital.",)
+    assert plain.relevant_context_ids == ()
+    assert plain.relevant_passages == ()
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        {"relevant_context_ids": "doc-1"},
+        {"relevant_context_ids": [{"id": 1}]},
+        {"relevant_passages": [""]},
+        {"relevant_passages": [3]},
+    ],
+)
+def test_rejects_malformed_relevance_labels(tmp_path, field):
+    path = write_questions(tmp_path, [{"question": "q?", "expected_answer": "a", **field}])
+
+    with pytest.raises(QuestionsUnavailableError, match="Question 1"):
+        JsonQuestionRepository().load(path)

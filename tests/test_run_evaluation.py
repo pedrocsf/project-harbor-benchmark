@@ -89,3 +89,52 @@ def test_stops_when_cancelled():
         build_use_case(gateway).execute(request, is_cancelled=lambda: next(checks))
 
     assert gateway.received_questions == ["a?"]
+
+
+class FakeRagGateway:
+    def __init__(self):
+        self.received = []
+
+    def ask(self, settings, question_text):
+        from domain.entities.rag_answer import RagAnswer
+        from domain.entities.retrieved_context import RetrievedContext
+
+        self.received.append((settings.endpoint_url, question_text))
+        return RagAnswer(f"rag {question_text}", (RetrievedContext("doc", "trecho"),))
+
+
+def test_rag_settings_route_questions_to_the_rag_gateway_and_keep_contexts():
+    from domain.entities.rag_endpoint_settings import RagEndpointSettings
+
+    language_model_gateway = FakeGateway()
+    rag_gateway = FakeRagGateway()
+    request = EvaluationRequest(
+        None,
+        (Question("1", "a?", "A"),),
+        HalfScoringMethod(),
+        rag_settings=RagEndpointSettings("http://rag"),
+    )
+
+    result = RunEvaluation(language_model_gateway, rag_gateway).execute(request)
+
+    assert rag_gateway.received == [("http://rag", "a?")]
+    assert language_model_gateway.received_questions == []
+    assert result.scores[0].given_answer == "rag a?"
+    assert result.scores[0].contexts[0].identifier == "doc"
+    assert result.has_contexts
+
+
+def test_model_endpoint_answers_have_no_contexts():
+    result = build_use_case().execute(build_request(Question("1", "a?", "A")))
+
+    assert result.scores[0].contexts is None
+
+
+def test_rag_request_without_rag_gateway_fails():
+    from domain.entities.rag_endpoint_settings import RagEndpointSettings
+    from domain.errors import DomainError
+
+    request = EvaluationRequest(None, (Question("1", "a?", "A"),), HalfScoringMethod(), RagEndpointSettings("x"))
+
+    with pytest.raises(DomainError, match="RAG"):
+        build_use_case().execute(request)
